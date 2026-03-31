@@ -7,7 +7,6 @@ on:
 
 permissions:
   contents: write
-  packages: write
 
 jobs:
   build-windows:
@@ -34,7 +33,25 @@ jobs:
       run: |
         python -m pip install --upgrade pip
         pip install -r requirements.txt
-        
+
+    - name: Verify Python syntax
+      run: |
+        $files = @(
+          "main.py",
+          "ui/main_window.py"
+        )
+        $files += Get-ChildItem core -Filter *.py | ForEach-Object { $_.FullName }
+        $files += Get-ChildItem ui/pages -Filter *.py | ForEach-Object { $_.FullName }
+        if (Test-Path tests) {
+          $files += Get-ChildItem tests -Filter *.py | ForEach-Object { $_.FullName }
+        }
+        python -m py_compile $files
+      shell: powershell
+
+    - name: Run unit tests
+      run: |
+        python -m unittest discover -s tests -p "test_*.py"
+
     - name: Create logs directory
       run: mkdir logs
       
@@ -130,6 +147,19 @@ jobs:
           README.md
           发布说明.md
         retention-days: 90
+        if-no-files-found: error
+
+    - name: Publish GitHub Release
+      uses: softprops/action-gh-release@v2
+      if: startsWith(github.ref, 'refs/tags/')
+      with:
+        files: |
+          WinCleaner_${{ github.ref_name }}.zip
+          dist/WinCleaner.exe
+          README.md
+          发布说明.md
+        generate_release_notes: true
+        fail_on_unmatched_files: true
         
     - name: Build Summary
       run: |
@@ -139,11 +169,12 @@ jobs:
         Write-Host "  - WinCleaner.exe (executable)"
         Write-Host "  - WinCleaner_*.zip (complete package)"
         Write-Host "  - Documentation files"
+        Write-Host "  - GitHub Release assets"
         Write-Host ""
         Write-Host "To download:"
-        Write-Host "  1. Go to Actions tab in GitHub"
-        Write-Host "  2. Click on this workflow run"
-        Write-Host "  3. Download artifacts from the bottom"
+        Write-Host "  1. Go to Releases page in GitHub"
+        Write-Host "  2. Open tag ${{ github.ref_name }}"
+        Write-Host "  3. Download ZIP or executable assets"
         Write-Host ""
         Write-Host "Version: ${{ github.ref_type == 'tag' && github.ref_name || github.sha }}"
         Write-Host "File size: ${{ steps.build_info.outputs.BUILD_SIZE }}"
