@@ -11,6 +11,13 @@ on:
         required: true
         default: 'v1.0.1'
 
+permissions:
+  contents: write
+  packages: write
+  actions: write
+  issues: write
+  pull-requests: write
+
 jobs:
   create-release:
     runs-on: windows-latest
@@ -156,7 +163,7 @@ File size: ${{ steps.build_info.outputs.BUILD_SIZE }}
         retention-days: 90
         
     - name: Create GitHub Release
-      uses: softprops/action-gh-release@v1
+      uses: softprops/action-gh-release@v2
       with:
         tag_name: ${{ steps.get_version.outputs.VERSION }}
         name: WinCleaner ${{ steps.get_version.outputs.VERSION }}
@@ -164,49 +171,42 @@ File size: ${{ steps.build_info.outputs.BUILD_SIZE }}
           WinCleaner_${{ steps.get_version.outputs.VERSION }}.zip
           dist/WinCleaner.exe
         body: |
-          ## 🎉 WinCleaner ${{ steps.get_version.outputs.VERSION }} 发布
+          ## 🎉 WinCleaner ${{ steps.get_version.outputs.VERSION }} Release
           
-          ### 📥 下载说明
-          - **完整包**: `WinCleaner_${{ steps.get_version.outputs.VERSION }}.zip` (包含文档)
-          - **单文件**: `WinCleaner.exe` (仅可执行文件)
+          ### 📥 Download
+          - **Complete Package**: `WinCleaner_${{ steps.get_version.outputs.VERSION }}.zip` (includes documentation)
+          - **Executable Only**: `WinCleaner.exe`
           
-          ### 🚀 安装步骤
-          1. 下载 `WinCleaner.exe`
-          2. 右键选择"以管理员身份运行"
-          3. 在UAC提示中点击"是"
+          ### 🚀 Installation
+          1. Download `WinCleaner.exe`
+          2. Right-click and select "Run as administrator"
+          3. Click "Yes" in UAC prompt
           
-          ### ✨ 主要功能
-          - 🖥️ **系统信息监控** - 实时显示硬件信息和性能状态
-          - 🔄 **Windows更新控制** - 一键禁用/启用自动更新
-          - 💾 **磁盘空间分析** - 可视化磁盘使用情况和大文件扫描
-          - 🗑️ **智能垃圾清理** - 清理微信、QQ、浏览器等缓存文件
-          - ⚙️ **进程管理** - 实时监控和管理系统进程
+          ### ✨ Features
+          - 🖥️ **System Information** - Real-time hardware info and performance monitoring
+          - 🔄 **Windows Update Control** - Enable/disable automatic updates
+          - 💾 **Disk Analysis** - Visualize disk usage and scan large files
+          - 🗑️ **Smart Cleanup** - Clean WeChat, QQ, browser caches and more
+          - ⚙️ **Process Management** - Monitor and manage system processes
           
-          ### 📋 系统要求
-          - Windows 10 (1903+) / Windows 11 (64位)
-          - 管理员权限
-          - 至少 50MB 可用磁盘空间
+          ### 📋 Requirements
+          - Windows 10 (1903+) / Windows 11 (64-bit)
+          - Administrator privileges
+          - At least 50MB free disk space
           
-          ### ⚠️ 重要提示
-          - 需要管理员权限才能正常工作
-          - 建议使用前备份重要数据
-          - 禁用Windows更新可能带来安全风险
-          - 系统关键进程受保护，无法终止
+          ### ⚠️ Important Notes
+          - Administrator privileges required for full functionality
+          - Backup important data before use
+          - Disabling Windows updates may pose security risks
           
-          ### 📊 构建信息
-          - 文件大小: ${{ steps.build_info.outputs.BUILD_SIZE }}
-          - 构建环境: Windows Server 2022
-          - Python版本: 3.11
-          - 打包工具: PyInstaller
-          
-          ### 🔗 相关链接
-          - [项目主页](https://github.com/zluyao782-prog/WinCleaner)
-          - [使用说明](https://github.com/zluyao782-prog/WinCleaner#readme)
-          - [问题反馈](https://github.com/zluyao782-prog/WinCleaner/issues)
+          ### 📊 Build Info
+          - File size: ${{ steps.build_info.outputs.BUILD_SIZE }}
+          - Build environment: Windows Server 2022
+          - Python version: 3.11
           
           ---
           
-          **如果这个项目对您有帮助，请给它一个 ⭐ Star！**
+          **⭐ If this project helps you, please give it a star!**
         draft: false
         prerelease: false
       env:
