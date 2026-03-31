@@ -34,12 +34,21 @@
 ![Release](https://github.com/zluyao782-prog/WinCleaner/workflows/Create%20Release/badge.svg)
 ```
 
+## 🔧 Actions 版本
+
+所有工作流使用最新版本的 GitHub Actions：
+- `actions/checkout@v4`
+- `actions/setup-python@v5`
+- `actions/cache@v4`
+- `actions/upload-artifact@v4`
+- `softprops/action-gh-release@v1`
+
 ## 🏷️ 创建发布版本
 
 ### 方法一：推送标签
 ```bash
-git tag v1.0.1
-git push origin v1.0.1
+git tag v1.0.2
+git push origin v1.0.2
 ```
 
 ### 方法二：手动触发
@@ -47,7 +56,7 @@ git push origin v1.0.1
 2. 点击 "Actions" 标签
 3. 选择 "Create Release" 工作流
 4. 点击 "Run workflow"
-5. 输入版本号 (如 v1.0.1)
+5. 输入版本号 (如 v1.0.2)
 6. 点击 "Run workflow"
 
 ## 📁 构建产物
@@ -57,3 +66,15 @@ git push origin v1.0.1
 - **文件类型**:
   - `WinCleaner.exe` - 单个可执行文件
   - `WinCleaner_vX.X.X.zip` - 完整发布包（包含文档）
+
+## 🐛 故障排除
+
+### 常见问题
+1. **Actions 版本过时**: 已更新到最新版本，避免弃用警告
+2. **权限问题**: 使用 `GITHUB_TOKEN` 自动权限
+3. **构建失败**: 检查 Python 依赖和 Windows 环境
+
+### 监控构建状态
+- 查看 Actions 页面的实时日志
+- 检查构建状态徽章
+- 关注 Artifacts 和 Releases 页面
