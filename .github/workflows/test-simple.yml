@@ -1,0 +1,36 @@
+name: Test Simple Build
+
+on:
+  push:
+    tags: [ 'v*' ]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  test-build:
+    runs-on: windows-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v5
+      
+    - name: Test PowerShell
+      run: |
+        Write-Host "Testing PowerShell execution"
+        Write-Host "Tag: ${{ github.ref_name }}"
+        Write-Host "Ref type: ${{ github.ref_type }}"
+      shell: powershell
+      
+    - name: Test Here-String
+      run: |
+        $version = "${{ github.ref_name }}"
+        $content = @'
+# Test Installation Guide
+Version: $version
+This is a test file.
+'@
+        Write-Host "Content created successfully"
+        Write-Host $content
+      shell: powershell
