@@ -81,14 +81,14 @@ jobs:
       id: build_info
       run: |
         if (Test-Path "dist\WinCleaner.exe") {
-          Write-Host "✅ Build successful!"
+          Write-Host "Build successful!"
           $size = (Get-Item "dist\WinCleaner.exe").Length
           $sizeMB = [math]::Round($size/1MB, 2)
-          Write-Host "📊 File size: $sizeMB MB"
+          Write-Host "File size: $sizeMB MB"
           echo "BUILD_SIZE=$sizeMB MB" >> $env:GITHUB_OUTPUT
           echo "BUILD_SUCCESS=true" >> $env:GITHUB_OUTPUT
         } else {
-          Write-Host "❌ Build failed - executable not found"
+          Write-Host "Build failed - executable not found"
           echo "BUILD_SUCCESS=false" >> $env:GITHUB_OUTPUT
           exit 1
         }
@@ -106,44 +106,44 @@ jobs:
         Copy-Item "dist\WinCleaner.exe" "$packageName\"
         
         # Copy documentation
-        Copy-Item "README.md" "$packageName\使用说明.md"
-        Copy-Item "发布说明.md" "$packageName\"
+        Copy-Item "README.md" "$packageName\User-Guide.md"
+        Copy-Item "发布说明.md" "$packageName\Release-Notes.md"
         
         # Create installation guide
         $installGuide = @"
-# WinCleaner $version 安装指南
+# WinCleaner $version Installation Guide
 
-## 快速开始
-1. 右键点击 WinCleaner.exe
-2. 选择"以管理员身份运行"
-3. 在UAC提示中点击"是"
+## Quick Start
+1. Right-click WinCleaner.exe
+2. Select "Run as administrator"
+3. Click "Yes" in UAC prompt
 
-## 系统要求
+## System Requirements
 - Windows 10 (1903+) / Windows 11
-- 64位系统
-- 管理员权限
+- 64-bit system
+- Administrator privileges
 
-## 重要提示
-- 程序需要管理员权限才能正常工作
-- 建议使用前备份重要数据
-- 禁用Windows更新可能带来安全风险
+## Important Notes
+- Administrator privileges required for full functionality
+- Backup important data before use
+- Disabling Windows updates may pose security risks
 
-## 技术支持
-如遇问题请查看 使用说明.md 或访问项目主页：
+## Technical Support
+For issues, see README.md or visit project homepage:
 https://github.com/zluyao782-prog/WinCleaner
 
 ---
-版本: $version
-构建时间: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')
-文件大小: ${{ steps.build_info.outputs.BUILD_SIZE }}
+Version: $version
+Build time: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')
+File size: ${{ steps.build_info.outputs.BUILD_SIZE }}
 "@
         
-        Set-Content "$packageName\安装指南.txt" $installGuide -Encoding UTF8
+        Set-Content "$packageName\Installation-Guide.txt" $installGuide -Encoding UTF8
         
         # Create ZIP package
         Compress-Archive -Path "$packageName\*" -DestinationPath "$packageName.zip"
         
-        Write-Host "✅ Release package created: $packageName.zip"
+        Write-Host "Release package created: $packageName.zip"
       shell: powershell
       
     - name: Upload release artifacts

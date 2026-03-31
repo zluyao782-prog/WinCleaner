@@ -53,11 +53,11 @@ jobs:
     - name: Verify build
       run: |
         if (Test-Path "dist\WinCleaner.exe") {
-          Write-Host "✅ Build successful!"
+          Write-Host "Build successful!"
           $size = (Get-Item "dist\WinCleaner.exe").Length
-          Write-Host "📊 File size: $([math]::Round($size/1MB, 2)) MB"
+          Write-Host "File size: $([math]::Round($size/1MB, 2)) MB"
         } else {
-          Write-Host "❌ Build failed - executable not found"
+          Write-Host "Build failed - executable not found"
           exit 1
         }
       shell: powershell
