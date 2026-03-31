@@ -54,7 +54,6 @@ REM 使用PyInstaller打包
 echo [6/6] 开始打包...
 pyinstaller --onefile --windowed --uac-admin ^
   --name WinCleaner ^
-  --icon assets\app.ico ^
   --add-data "config;config" ^
   --distpath dist ^
   --workpath build ^

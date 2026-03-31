@@ -6,7 +6,6 @@
 ![Platform](https://img.shields.io/badge/Platform-Windows%2010%2F11-lightgrey?style=for-the-badge)
 ![License](https://img.shields.io/badge/License-Educational-green?style=for-the-badge)
 
-![Build Status](https://github.com/zluyao782-prog/WinCleaner/workflows/CI%2FCD%20Pipeline/badge.svg)
 ![Windows Build](https://github.com/zluyao782-prog/WinCleaner/workflows/Build%20Windows%20Release/badge.svg)
 ![Release](https://github.com/zluyao782-prog/WinCleaner/workflows/Create%20Release/badge.svg)
 

@@ -2,13 +2,6 @@
 
 本项目包含以下 GitHub Actions 工作流：
 
-## 🔄 CI/CD Pipeline (`ci.yml`)
-- **触发条件**: 推送到 main/develop 分支，Pull Request
-- **功能**: 
-  - 代码质量检查 (Black, isort, Flake8)
-  - 跨平台测试 (Ubuntu, macOS)
-  - Windows 构建测试
-
 ## 🏗️ Windows Build (`build-windows.yml`)
 - **触发条件**: 推送到 main 分支，标签推送，手动触发
 - **功能**:
@@ -29,7 +22,6 @@
 在 README.md 中可以使用以下徽章：
 
 ```markdown
-![Build Status](https://github.com/zluyao782-prog/WinCleaner/workflows/CI%2FCD%20Pipeline/badge.svg)
 ![Windows Build](https://github.com/zluyao782-prog/WinCleaner/workflows/Build%20Windows%20Release/badge.svg)
 ![Release](https://github.com/zluyao782-prog/WinCleaner/workflows/Create%20Release/badge.svg)
 ```
@@ -73,8 +65,17 @@ git push origin v1.0.2
 1. **Actions 版本过时**: 已更新到最新版本，避免弃用警告
 2. **权限问题**: 使用 `GITHUB_TOKEN` 自动权限
 3. **构建失败**: 检查 Python 依赖和 Windows 环境
+4. **图标问题**: 当前版本不使用自定义图标，避免PIL依赖
 
 ### 监控构建状态
 - 查看 Actions 页面的实时日志
 - 检查构建状态徽章
 - 关注 Artifacts 和 Releases 页面
+
+## 🎯 专注Windows
+
+由于 WinCleaner 是专门为 Windows 设计的系统工具：
+- 仅在 Windows 环境下构建和测试
+- 使用 Windows 特定的 API (winreg, wmi, pywin32)
+- 针对 Windows 10/11 优化
+- 无需跨平台兼容性测试
