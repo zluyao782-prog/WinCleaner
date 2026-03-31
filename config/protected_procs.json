@@ -1,0 +1,15 @@
+{
+  "protected_processes": [
+    "system",
+    "smss.exe",
+    "csrss.exe",
+    "wininit.exe",
+    "winlogon.exe",
+    "lsass.exe",
+    "services.exe",
+    "dwm.exe",
+    "explorer.exe",
+    "svchost.exe"
+  ],
+  "description": "系统保护进程列表，这些进程不允许被终止"
+}

@@ -1,0 +1,35 @@
+{
+  "系统临时文件": [
+    "%TEMP%\\*",
+    "C:\\Windows\\Temp\\*",
+    "%USERPROFILE%\\AppData\\Local\\Temp\\*"
+  ],
+  "微信缓存": [
+    "%USERPROFILE%\\Documents\\WeChat Files\\*\\FileStorage\\Image\\*\\*",
+    "%USERPROFILE%\\Documents\\WeChat Files\\*\\FileStorage\\Video\\*\\*",
+    "%USERPROFILE%\\Documents\\WeChat Files\\*\\FileStorage\\Cache\\*"
+  ],
+  "QQ缓存": [
+    "%USERPROFILE%\\Documents\\Tencent Files\\*\\Image\\*",
+    "%USERPROFILE%\\Documents\\Tencent Files\\*\\Video\\*",
+    "%USERPROFILE%\\AppData\\Roaming\\Tencent\\QQ\\Temp\\*"
+  ],
+  "浏览器缓存": [
+    "%USERPROFILE%\\AppData\\Local\\Google\\Chrome\\User Data\\Default\\Cache\\*",
+    "%USERPROFILE%\\AppData\\Local\\Microsoft\\Edge\\User Data\\Default\\Cache\\*",
+    "%USERPROFILE%\\AppData\\Local\\Mozilla\\Firefox\\Profiles\\*\\cache2\\*"
+  ],
+  "缩略图缓存": [
+    "%USERPROFILE%\\AppData\\Local\\Microsoft\\Windows\\Explorer\\thumbcache_*.db",
+    "%USERPROFILE%\\AppData\\Local\\Microsoft\\Windows\\Explorer\\iconcache_*.db"
+  ],
+  "系统日志": [
+    "C:\\Windows\\Logs\\*\\*.log",
+    "C:\\Windows\\System32\\LogFiles\\*\\*.log"
+  ],
+  "下载临时文件": [
+    "%USERPROFILE%\\Downloads\\*.tmp",
+    "%USERPROFILE%\\Downloads\\*.temp",
+    "%USERPROFILE%\\Downloads\\*.crdownload"
+  ]
+}
