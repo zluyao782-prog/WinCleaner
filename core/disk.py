@@ -5,11 +5,18 @@
 """
 
 import os
+import heapq
 import logging
 import psutil
-from typing import List, Dict, Tuple
+from typing import Callable, Dict, List, Tuple
 
 logger = logging.getLogger(__name__)
+EXCLUDED_DIR_NAMES = {
+    'System Volume Information',
+    'Recovery',
+    'Windows',
+    '$Recycle.Bin',
+}
 
 
 def get_disk_usage() -> List[Dict]:
@@ -45,39 +52,81 @@ def get_disk_usage() -> List[Dict]:
     return result
 
 
-def scan_large_files(path: str, top_n: int = 20) -> List[Tuple[int, str]]:
+def scan_large_files(
+    path: str,
+    top_n: int = 20,
+    min_size_bytes: int = 100 * 1024 * 1024,
+    progress_callback: Callable[[str], None] | None = None,
+    should_cancel: Callable[[], bool] | None = None,
+) -> List[Tuple[int, str]]:
     """扫描指定路径下的大文件
     
     Args:
         path: 扫描路径
         top_n: 返回前N个最大文件
+        min_size_bytes: 仅统计不小于该值的文件
         
     Returns:
         List[Tuple[int, str]]: (文件大小字节, 文件路径) 的列表，按大小降序
     """
-    files = []
+    largest_files: List[Tuple[int, str]] = []
+    scanned_files = 0
+    scanned_dirs = 0
     
     try:
-        for root, dirs, filenames in os.walk(path):
-            # 跳过系统保护目录
-            dirs[:] = [d for d in dirs if not d.startswith('$') and d not in [
-                'System Volume Information', 'Recovery', 'Windows'
-            ]]
-            
-            for filename in filenames:
-                filepath = os.path.join(root, filename)
-                try:
-                    size = os.path.getsize(filepath)
-                    files.append((size, filepath))
-                except (OSError, PermissionError):
-                    # 跳过无法访问的文件
-                    continue
+        pending_dirs = [os.path.abspath(path)]
+        while pending_dirs:
+            if should_cancel and should_cancel():
+                if progress_callback:
+                    progress_callback("扫描已取消")
+                break
+            current_dir = pending_dirs.pop()
+            scanned_dirs += 1
+
+            if progress_callback and scanned_dirs % 100 == 0:
+                progress_callback(f"正在扫描 {current_dir}，已遍历 {scanned_files} 个文件...")
+
+            try:
+                with os.scandir(current_dir) as entries:
+                    for entry in entries:
+                        try:
+                            if should_cancel and should_cancel():
+                                if progress_callback:
+                                    progress_callback("扫描已取消")
+                                return sorted(largest_files, reverse=True)
+                            if entry.is_symlink():
+                                continue
+                            if entry.is_dir(follow_symlinks=False):
+                                if entry.name.startswith('$') or entry.name in EXCLUDED_DIR_NAMES:
+                                    continue
+                                pending_dirs.append(entry.path)
+                                continue
+                            if not entry.is_file(follow_symlinks=False):
+                                continue
+
+                            scanned_files += 1
+                            size = entry.stat(follow_symlinks=False).st_size
+                            if size < min_size_bytes:
+                                continue
+                            candidate = (size, entry.path)
+                            if len(largest_files) < top_n:
+                                heapq.heappush(largest_files, candidate)
+                            elif size > largest_files[0][0]:
+                                heapq.heapreplace(largest_files, candidate)
+
+                            if progress_callback and scanned_files % 2000 == 0:
+                                progress_callback(
+                                    f"正在扫描 {current_dir}，已遍历 {scanned_files} 个文件..."
+                                )
+                        except (OSError, PermissionError):
+                            continue
+            except (OSError, PermissionError):
+                continue
                     
     except Exception as e:
         logger.warning("扫描大文件失败: path=%s error=%s", path, e)
         
-    # 按大小降序排序，返回前N个
-    return sorted(files, reverse=True)[:top_n]
+    return sorted(largest_files, reverse=True)
 
 
 def get_disk_io_speed() -> Dict[str, float]:

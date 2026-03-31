@@ -47,9 +47,9 @@ class UpdatePage(QWidget):
     
     def __init__(self):
         super().__init__()
+        self.is_active = False
         self.worker = None
         self.init_ui()
-        self.refresh()
         
     def init_ui(self):
         """初始化UI"""
@@ -103,6 +103,7 @@ class UpdatePage(QWidget):
         
         # 刷新按钮
         refresh_btn = QPushButton("刷新状态")
+        refresh_btn.setObjectName("SubtleButton")
         refresh_btn.clicked.connect(self.refresh)
         status_inner_layout.addWidget(refresh_btn)
         
@@ -123,13 +124,13 @@ class UpdatePage(QWidget):
         button_layout = QHBoxLayout()
         
         self.disable_btn = QPushButton("禁用Windows更新")
+        self.disable_btn.setObjectName("DangerButton")
         self.disable_btn.setFixedHeight(40)
-        self.disable_btn.setStyleSheet("QPushButton { background-color: #C00000; color: white; font-weight: bold; }")
         self.disable_btn.clicked.connect(self.disable_update)
         
         self.enable_btn = QPushButton("启用Windows更新")
+        self.enable_btn.setObjectName("SuccessButton")
         self.enable_btn.setFixedHeight(40)
-        self.enable_btn.setStyleSheet("QPushButton { background-color: #1D7A4A; color: white; font-weight: bold; }")
         self.enable_btn.clicked.connect(self.enable_update)
         
         button_layout.addWidget(self.disable_btn)
@@ -176,6 +177,8 @@ class UpdatePage(QWidget):
         
     def refresh(self):
         """刷新状态"""
+        if not self.is_active:
+            return
         try:
             # 更新主状态
             status = get_update_status()
@@ -202,6 +205,12 @@ class UpdatePage(QWidget):
                         
         except Exception as e:
             self.log(f"刷新状态失败: {e}")
+
+    def set_active(self, active: bool):
+        """统一页面激活入口。"""
+        self.is_active = active
+        if active:
+            self.refresh()
             
     def disable_update(self):
         """禁用更新"""

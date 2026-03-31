@@ -29,6 +29,7 @@ class MainWindow(QMainWindow):
         self.log_records = []
         self.init_ui()
         self.setup_connections()
+        self.activate_page(0)
         
     def init_ui(self):
         """初始化UI"""
@@ -62,7 +63,7 @@ class MainWindow(QMainWindow):
     def create_navigation(self):
         """创建导航栏"""
         self.nav_frame = QFrame()
-        self.nav_frame.setFixedWidth(200)
+        self.nav_frame.setFixedWidth(224)
         self.nav_frame.setFrameStyle(QFrame.Shape.StyledPanel)
         
         nav_layout = QVBoxLayout(self.nav_frame)
@@ -72,10 +73,15 @@ class MainWindow(QMainWindow):
         title_label = QLabel("WinCleaner")
         title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         title_font = QFont()
-        title_font.setPointSize(16)
+        title_font.setPointSize(18)
         title_font.setBold(True)
         title_label.setFont(title_font)
         nav_layout.addWidget(title_label)
+
+        subtitle_label = QLabel("Windows maintenance suite")
+        subtitle_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        subtitle_label.setObjectName("NavSubtitle")
+        nav_layout.addWidget(subtitle_label)
         
         nav_layout.addSpacing(20)
         
@@ -103,11 +109,29 @@ class MainWindow(QMainWindow):
     def create_content_area(self):
         """创建内容区域"""
         self.content_container = QWidget()
+        self.content_container.setObjectName("ContentContainer")
         content_layout = QVBoxLayout(self.content_container)
-        content_layout.setContentsMargins(0, 0, 0, 0)
-        content_layout.setSpacing(0)
+        content_layout.setContentsMargins(16, 16, 16, 16)
+        content_layout.setSpacing(12)
+
+        self.page_header = QFrame()
+        self.page_header.setObjectName("PageHeader")
+        header_layout = QHBoxLayout(self.page_header)
+        header_layout.setContentsMargins(20, 16, 20, 16)
+        header_layout.setSpacing(10)
+
+        self.page_title_label = QLabel("系统信息")
+        self.page_title_label.setObjectName("PageTitle")
+        header_layout.addWidget(self.page_title_label)
+        header_layout.addStretch()
+
+        self.page_hint_label = QLabel("查看系统状态与关键维护能力")
+        self.page_hint_label.setObjectName("PageHint")
+        header_layout.addWidget(self.page_hint_label)
+        content_layout.addWidget(self.page_header)
 
         self.content_splitter = QSplitter(Qt.Orientation.Vertical)
+        self.content_splitter.setObjectName("ContentSplitter")
         content_layout.addWidget(self.content_splitter)
 
         self.content_widget = QStackedWidget()
@@ -206,12 +230,33 @@ class MainWindow(QMainWindow):
         
     def on_nav_changed(self, index):
         """导航切换事件"""
+        self.activate_page(index)
+
+    def activate_page(self, index: int):
+        """激活当前页面，并停止隐藏页面的后台刷新。"""
         self.content_widget.setCurrentIndex(index)
-        
-        # 刷新当前页面
-        current_page = list(self.pages.values())[index]
-        if hasattr(current_page, 'refresh'):
+        page_names = list(self.pages.keys())
+        page_hints = {
+            "系统信息": "查看系统状态与关键维护能力",
+            "更新控制": "谨慎执行系统更新相关操作",
+            "磁盘分析": "快速定位空间占用与大文件",
+            "垃圾清理": "先预览，再排除，再清理",
+            "进程管理": "仅处理你明确选择的高负荷进程",
+        }
+
+        for page in self.pages.values():
+            if hasattr(page, "set_active"):
+                page.set_active(False)
+
+        current_name = page_names[index]
+        current_page = self.pages[current_name]
+        if hasattr(current_page, "set_active"):
+            current_page.set_active(True)
+        elif hasattr(current_page, "refresh"):
             current_page.refresh()
+
+        self.page_title_label.setText(current_name)
+        self.page_hint_label.setText(page_hints.get(current_name, ""))
 
     def append_global_log(self, level: str, message: str):
         """追加全局日志。"""
@@ -257,12 +302,41 @@ class MainWindow(QMainWindow):
         """设置样式"""
         self.setStyleSheet("""
             QMainWindow {
-                background-color: #f5f5f5;
+                background-color: #eef2f6;
             }
             
             QFrame {
                 background-color: white;
-                border: 1px solid #e0e0e0;
+                border: 1px solid #d8e0ea;
+                border-radius: 14px;
+            }
+
+            QFrame#ContentContainer {
+                background: transparent;
+                border: none;
+            }
+
+            QFrame#PageHeader {
+                background-color: #f9fbfc;
+                border: 1px solid #d8e0ea;
+                border-radius: 16px;
+            }
+
+            QLabel#PageTitle {
+                font-size: 28px;
+                font-weight: 700;
+                color: #18324a;
+            }
+
+            QLabel#PageHint {
+                color: #66788a;
+                font-size: 13px;
+            }
+
+            QLabel#NavSubtitle {
+                color: #c6d3df;
+                font-size: 11px;
+                letter-spacing: 0.5px;
             }
             
             QListWidget {
@@ -272,23 +346,99 @@ class MainWindow(QMainWindow):
             }
             
             QListWidget::item {
-                padding: 12px;
-                border-radius: 6px;
-                margin: 2px;
-                color: #333;
+                padding: 14px 16px;
+                border-radius: 10px;
+                margin: 4px 2px;
+                color: #d8e4ed;
+                background-color: transparent;
             }
             
             QListWidget::item:selected {
-                background-color: #1F3864;
+                background-color: #f4f8fb;
+                color: #153047;
+                font-weight: 600;
+            }
+
+            QListWidget::item:selected:active {
                 color: white;
             }
             
             QListWidget::item:hover {
-                background-color: #EBF3FB;
+                background-color: rgba(255, 255, 255, 0.12);
             }
             
             QLabel {
                 color: #333;
+            }
+
+            QPushButton {
+                background-color: #e7eef5;
+                border: 1px solid #cfd9e3;
+                border-radius: 10px;
+                padding: 8px 14px;
+                color: #18324a;
+                font-weight: 600;
+            }
+
+            QPushButton:hover {
+                background-color: #dde7f0;
+            }
+
+            QPushButton:pressed {
+                background-color: #d1dce7;
+            }
+
+            QPushButton#PrimaryButton {
+                background-color: #2f6b9a;
+                border: 1px solid #24597f;
+                color: white;
+            }
+
+            QPushButton#PrimaryButton:hover {
+                background-color: #255c86;
+            }
+
+            QPushButton#DangerButton {
+                background-color: #c65443;
+                border: 1px solid #a84435;
+                color: white;
+            }
+
+            QPushButton#DangerButton:hover {
+                background-color: #b64a3a;
+            }
+
+            QPushButton#SuccessButton {
+                background-color: #2d7a57;
+                border: 1px solid #236246;
+                color: white;
+            }
+
+            QPushButton#SuccessButton:hover {
+                background-color: #256a4c;
+            }
+
+            QPushButton#SubtleButton {
+                background-color: #f4f7fa;
+                border: 1px solid #d8e0ea;
+                color: #31506a;
+            }
+
+            QPushButton#SubtleButton:hover {
+                background-color: #eaf0f5;
+            }
+
+            QLineEdit, QComboBox, QSpinBox, QTextEdit, QTableWidget, QGroupBox {
+                border-radius: 12px;
+            }
+
+            QGroupBox {
+                margin-top: 10px;
+                padding-top: 14px;
+                font-weight: 600;
+                color: #18324a;
+                border: 1px solid #d8e0ea;
+                background-color: #fbfcfd;
             }
 
             QPlainTextEdit {
@@ -297,9 +447,54 @@ class MainWindow(QMainWindow):
                 font-family: Consolas, 'Courier New', monospace;
                 font-size: 12px;
             }
+
+            QTableWidget {
+                background-color: white;
+                border: 1px solid #d8e0ea;
+                gridline-color: #edf2f7;
+                selection-background-color: #e7f0f8;
+                selection-color: #18324a;
+            }
+
+            QHeaderView::section {
+                background-color: #f3f7fa;
+                border: none;
+                border-bottom: 1px solid #d8e0ea;
+                padding: 8px;
+                color: #526679;
+                font-weight: 600;
+            }
+
+            QProgressBar {
+                border: 1px solid #d8e0ea;
+                border-radius: 8px;
+                background-color: #f4f7fa;
+                text-align: center;
+            }
+
+            QProgressBar::chunk {
+                background-color: #2f6b9a;
+                border-radius: 7px;
+            }
+
+            QSplitter::handle {
+                background-color: #d8e0ea;
+                height: 2px;
+            }
             
             QStatusBar {
-                background-color: #f0f0f0;
-                border-top: 1px solid #d0d0d0;
+                background-color: #f8fafc;
+                border-top: 1px solid #d8e0ea;
+            }
+        """)
+
+        self.nav_frame.setStyleSheet("""
+            QFrame {
+                background-color: #17324a;
+                border: none;
+                border-radius: 0;
+            }
+            QLabel {
+                color: #f3f7fa;
             }
         """)

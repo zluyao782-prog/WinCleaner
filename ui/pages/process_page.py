@@ -24,11 +24,11 @@ class ProcessPage(QWidget):
     
     def __init__(self):
         super().__init__()
+        self.is_active = False
         self.current_processes = []
         self.refresh_timer = QTimer()
         self.init_ui()
         self.setup_timer()
-        self.refresh()
         
     def init_ui(self):
         """初始化UI"""
@@ -124,9 +124,16 @@ class ProcessPage(QWidget):
         row1_layout.addWidget(QLabel("刷新间隔:"))
         self.interval_combo = QComboBox()
         self.interval_combo.addItems(["1秒", "3秒", "5秒"])
-        self.interval_combo.setCurrentText("3秒")
+        self.interval_combo.setCurrentText("5秒")
         self.interval_combo.currentTextChanged.connect(self.on_interval_changed)
         row1_layout.addWidget(self.interval_combo)
+
+        row1_layout.addWidget(QLabel("显示数量:"))
+        self.limit_combo = QComboBox()
+        self.limit_combo.addItems(["100", "200", "500", "全部"])
+        self.limit_combo.setCurrentText("200")
+        self.limit_combo.currentTextChanged.connect(self.on_limit_changed)
+        row1_layout.addWidget(self.limit_combo)
         
         control_layout.addLayout(row1_layout)
         
@@ -134,18 +141,20 @@ class ProcessPage(QWidget):
         row2_layout = QHBoxLayout()
         
         self.refresh_btn = QPushButton("立即刷新")
+        self.refresh_btn.setObjectName("SubtleButton")
         self.refresh_btn.clicked.connect(self.refresh)
         row2_layout.addWidget(self.refresh_btn)
         
         self.kill_high_btn = QPushButton("关闭所选高负荷进程")
+        self.kill_high_btn.setObjectName("DangerButton")
         self.kill_high_btn.clicked.connect(self.kill_high_load)
-        self.kill_high_btn.setStyleSheet("QPushButton { background-color: #C05000; color: white; }")
         row2_layout.addWidget(self.kill_high_btn)
         
         row2_layout.addStretch()
         
         # 暂停/恢复刷新
         self.pause_btn = QPushButton("暂停刷新")
+        self.pause_btn.setObjectName("SubtleButton")
         self.pause_btn.clicked.connect(self.toggle_refresh)
         row2_layout.addWidget(self.pause_btn)
         
@@ -196,10 +205,23 @@ class ProcessPage(QWidget):
     def setup_timer(self):
         """设置定时器"""
         self.refresh_timer.timeout.connect(self.refresh)
-        self.refresh_timer.start(3000)  # 默认3秒刷新
+        self.refresh_timer.start(5000)
+
+    def set_active(self, active: bool):
+        """切换页面活跃状态。"""
+        self.is_active = active
+        if active:
+            interval_map = {"1秒": 1000, "3秒": 3000, "5秒": 5000}
+            interval = interval_map.get(self.interval_combo.currentText(), 5000)
+            self.refresh_timer.start(interval)
+            self.refresh()
+        else:
+            self.refresh_timer.stop()
         
     def refresh(self):
         """刷新进程列表"""
+        if not self.is_active:
+            return
         try:
             # 更新系统性能
             self.update_performance()
@@ -214,6 +236,10 @@ class ProcessPage(QWidget):
                 self.current_processes = search_processes(search_text)
             else:
                 self.current_processes = get_processes(sort_by)
+
+            limit_text = self.limit_combo.currentText()
+            if limit_text != "全部":
+                self.current_processes = self.current_processes[:int(limit_text)]
                 
             # 更新表格
             self.update_process_table()
@@ -246,68 +272,95 @@ class ProcessPage(QWidget):
             
     def update_process_table(self):
         """更新进程表格"""
+        self.process_table.setUpdatesEnabled(False)
         self.process_table.setRowCount(len(self.current_processes))
         
         for i, proc in enumerate(self.current_processes):
-            # 进程名称
-            name_item = QTableWidgetItem(proc["name"])
+            name_item = self._get_or_create_item(i, 0)
+            name_item.setText(proc["name"])
             if proc["is_protected"]:
                 name_item.setText(f"🔒 {proc['name']}")
-            self.process_table.setItem(i, 0, name_item)
             
-            # PID
-            self.process_table.setItem(i, 1, QTableWidgetItem(str(proc["pid"])))
+            pid_item = self._get_or_create_item(i, 1)
+            pid_item.setText(str(proc["pid"]))
             
-            # CPU使用率
-            cpu_item = QTableWidgetItem(f"{proc['cpu_percent']}%")
-            self.process_table.setItem(i, 2, cpu_item)
+            cpu_item = self._get_or_create_item(i, 2)
+            cpu_item.setText(f"{proc['cpu_percent']}%")
             
-            # 内存使用
-            mem_item = QTableWidgetItem(f"{proc['memory_mb']}")
-            self.process_table.setItem(i, 3, mem_item)
+            mem_item = self._get_or_create_item(i, 3)
+            mem_item.setText(f"{proc['memory_mb']}")
             
-            # 状态
-            self.process_table.setItem(i, 4, QTableWidgetItem(proc["status"]))
+            status_item = self._get_or_create_item(i, 4)
+            status_item.setText(proc["status"])
             
-            # 运行时间
-            self.process_table.setItem(i, 5, QTableWidgetItem(proc["runtime"]))
+            runtime_item = self._get_or_create_item(i, 5)
+            runtime_item.setText(proc["runtime"])
             
             # 根据负荷级别设置行颜色
+            row_color = None
             if proc["level"] == "high":
-                for col in range(6):
-                    item = self.process_table.item(i, col)
-                    if item:
-                        item.setBackground(QColor("#FFE6E6"))  # 浅红色
+                row_color = QColor("#FFE6E6")
             elif proc["level"] == "warning":
-                for col in range(6):
-                    item = self.process_table.item(i, col)
-                    if item:
-                        item.setBackground(QColor("#FFF3E0"))  # 浅橙色
+                row_color = QColor("#FFF3E0")
+            else:
+                row_color = QColor("#FFFFFF")
+
+            for col in range(6):
+                item = self.process_table.item(i, col)
+                if item:
+                    item.setBackground(row_color)
                         
             # 操作按钮
             if not proc["is_protected"]:
-                action_widget = QWidget()
-                action_layout = QHBoxLayout(action_widget)
-                action_layout.setContentsMargins(5, 5, 5, 5)
-                
-                kill_btn = QPushButton("终止")
-                kill_btn.setFixedSize(50, 25)
+                action_widget = self.process_table.cellWidget(i, 6)
+                if action_widget is None or not hasattr(action_widget, "kill_btn"):
+                    action_widget = QWidget()
+                    action_layout = QHBoxLayout(action_widget)
+                    action_layout.setContentsMargins(5, 5, 5, 5)
+                    kill_btn = QPushButton("终止")
+                    kill_btn.setObjectName("DangerButton")
+                    kill_btn.setFixedSize(50, 25)
+                    action_layout.addWidget(kill_btn)
+                    action_widget.kill_btn = kill_btn
+                    self.process_table.setCellWidget(i, 6, action_widget)
+                kill_btn = action_widget.kill_btn
+                try:
+                    kill_btn.clicked.disconnect()
+                except Exception:
+                    pass
                 kill_btn.clicked.connect(lambda checked, pid=proc["pid"], name=proc["name"]: self.kill_process(pid, name))
-                
                 if proc["level"] == "high":
-                    kill_btn.setStyleSheet("QPushButton { background-color: #C00000; color: white; }")
+                    kill_btn.setObjectName("DangerButton")
+                    kill_btn.style().unpolish(kill_btn)
+                    kill_btn.style().polish(kill_btn)
                 elif proc["level"] == "warning":
-                    kill_btn.setStyleSheet("QPushButton { background-color: #C05000; color: white; }")
-                    
-                action_layout.addWidget(kill_btn)
-                self.process_table.setCellWidget(i, 6, action_widget)
+                    kill_btn.setObjectName("PrimaryButton")
+                    kill_btn.style().unpolish(kill_btn)
+                    kill_btn.style().polish(kill_btn)
+                else:
+                    kill_btn.setObjectName("SubtleButton")
+                    kill_btn.style().unpolish(kill_btn)
+                    kill_btn.style().polish(kill_btn)
             else:
-                # 保护进程显示锁图标
-                protected_widget = QWidget()
-                protected_layout = QHBoxLayout(protected_widget)
-                protected_layout.setContentsMargins(5, 5, 5, 5)
-                protected_layout.addWidget(QLabel("🔒 受保护"))
-                self.process_table.setCellWidget(i, 6, protected_widget)
+                protected_widget = self.process_table.cellWidget(i, 6)
+                if protected_widget is None or not hasattr(protected_widget, "label"):
+                    protected_widget = QWidget()
+                    protected_layout = QHBoxLayout(protected_widget)
+                    protected_layout.setContentsMargins(5, 5, 5, 5)
+                    label = QLabel("🔒 受保护")
+                    protected_layout.addWidget(label)
+                    protected_widget.label = label
+                    self.process_table.setCellWidget(i, 6, protected_widget)
+
+        self.process_table.setUpdatesEnabled(True)
+
+    def _get_or_create_item(self, row: int, column: int) -> QTableWidgetItem:
+        """复用已有单元格，避免每次刷新都重建全部 item。"""
+        item = self.process_table.item(row, column)
+        if item is None:
+            item = QTableWidgetItem()
+            self.process_table.setItem(row, column, item)
+        return item
                 
     def kill_process(self, pid: int, name: str):
         """终止进程"""
@@ -402,8 +455,12 @@ class ProcessPage(QWidget):
         interval_map = {"1秒": 1000, "3秒": 3000, "5秒": 5000}
         interval = interval_map.get(text, 3000)
         
-        if self.refresh_timer.isActive():
+        if self.refresh_timer.isActive() and self.is_active:
             self.refresh_timer.start(interval)
+
+    def on_limit_changed(self, text):
+        """显示数量改变。"""
+        self.refresh()
             
     def toggle_refresh(self):
         """切换刷新状态"""
@@ -414,6 +471,7 @@ class ProcessPage(QWidget):
         else:
             interval_map = {"1秒": 1000, "3秒": 3000, "5秒": 5000}
             interval = interval_map.get(self.interval_combo.currentText(), 3000)
+            self.is_active = True
             self.refresh_timer.start(interval)
             self.pause_btn.setText("暂停刷新")
             self.log("已恢复自动刷新")

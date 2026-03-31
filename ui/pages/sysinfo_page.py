@@ -61,6 +61,7 @@ class SystemInfoPage(QWidget):
     
     def __init__(self):
         super().__init__()
+        self.is_active = True
         self.init_ui()
         self.setup_timer()
         self.refresh()
@@ -87,6 +88,7 @@ class SystemInfoPage(QWidget):
         
         # 刷新按钮
         refresh_btn = QPushButton("刷新信息")
+        refresh_btn.setObjectName("PrimaryButton")
         refresh_btn.clicked.connect(self.refresh)
         refresh_btn.setFixedWidth(120)
         layout.addWidget(refresh_btn, alignment=Qt.AlignmentFlag.AlignRight)
@@ -157,10 +159,22 @@ class SystemInfoPage(QWidget):
         """设置定时器"""
         self.timer = QTimer()
         self.timer.timeout.connect(self.update_performance)
-        self.timer.start(3000)  # 每3秒更新一次
+        self.timer.start(4000)
+
+    def set_active(self, active: bool):
+        """切换页面活跃状态，隐藏页不做后台刷新。"""
+        self.is_active = active
+        if active:
+            if not self.timer.isActive():
+                self.timer.start(4000)
+            self.refresh()
+        else:
+            self.timer.stop()
         
     def refresh(self):
         """刷新系统信息"""
+        if not self.is_active:
+            return
         try:
             engine.log("INFO", "[系统信息] 刷新系统信息")
             # 获取系统信息
@@ -190,6 +204,8 @@ class SystemInfoPage(QWidget):
             
     def update_performance(self):
         """更新性能监控"""
+        if not self.is_active:
+            return
         try:
             # CPU使用率
             cpu_usage = get_cpu_usage()

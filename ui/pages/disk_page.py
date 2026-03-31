@@ -24,18 +24,33 @@ class DiskScanWorker(QThread):
     error = pyqtSignal(str)
     progress = pyqtSignal(str)
     
-    def __init__(self, path: str, top_n: int):
+    def __init__(self, path: str, top_n: int, min_size_bytes: int):
         super().__init__()
         self.path = path
         self.top_n = top_n
+        self.min_size_bytes = min_size_bytes
+        self._cancel_requested = False
         
     def run(self):
         try:
             self.progress.emit(f"正在扫描 {self.path}...")
-            result = scan_large_files(self.path, self.top_n)
+            result = scan_large_files(
+                self.path,
+                self.top_n,
+                self.min_size_bytes,
+                self.progress.emit,
+                self.is_cancel_requested,
+            )
             self.finished.emit(result)
         except Exception as e:
             self.error.emit(str(e))
+
+    def cancel(self):
+        """请求取消扫描。"""
+        self._cancel_requested = True
+
+    def is_cancel_requested(self) -> bool:
+        return self._cancel_requested
 
 
 class DiskPage(QWidget):
@@ -78,6 +93,7 @@ class DiskPage(QWidget):
         refresh_layout = QHBoxLayout()
         refresh_layout.addStretch()
         refresh_btn = QPushButton("刷新")
+        refresh_btn.setObjectName("SubtleButton")
         refresh_btn.clicked.connect(self.refresh_disk_usage)
         refresh_layout.addWidget(refresh_btn)
         usage_layout.addLayout(refresh_layout)
@@ -120,10 +136,23 @@ class DiskPage(QWidget):
         self.count_spin.setRange(10, 100)
         self.count_spin.setValue(20)
         settings_layout.addWidget(self.count_spin)
+
+        settings_layout.addWidget(QLabel("最小大小:"))
+        self.min_size_combo = QComboBox()
+        self.min_size_combo.addItems(["10 MB", "50 MB", "100 MB", "500 MB", "1 GB"])
+        self.min_size_combo.setCurrentText("100 MB")
+        settings_layout.addWidget(self.min_size_combo)
         
         self.scan_btn = QPushButton("开始扫描")
+        self.scan_btn.setObjectName("PrimaryButton")
         self.scan_btn.clicked.connect(self.start_scan)
         settings_layout.addWidget(self.scan_btn)
+
+        self.cancel_btn = QPushButton("取消扫描")
+        self.cancel_btn.setObjectName("SubtleButton")
+        self.cancel_btn.clicked.connect(self.cancel_scan)
+        self.cancel_btn.setEnabled(False)
+        settings_layout.addWidget(self.cancel_btn)
         
         files_layout.addLayout(settings_layout)
         
@@ -213,17 +242,23 @@ class DiskPage(QWidget):
             return
             
         count = self.count_spin.value()
+        min_size_text = self.min_size_combo.currentText()
+        min_size_bytes = self.parse_min_size(min_size_text)
         
         # 禁用按钮
         self.scan_btn.setEnabled(False)
         self.scan_btn.setText("扫描中...")
+        self.cancel_btn.setEnabled(True)
         
         # 清空表格
         self.files_table.setRowCount(0)
         
         # 启动扫描线程
-        engine.log("INFO", f"[磁盘分析] 开始扫描大文件: path={path}, top_n={count}")
-        self.scan_worker = DiskScanWorker(path, count)
+        engine.log(
+            "INFO",
+            f"[磁盘分析] 开始扫描大文件: path={path}, top_n={count}, min_size={min_size_text}",
+        )
+        self.scan_worker = DiskScanWorker(path, count, min_size_bytes)
         self.scan_worker.finished.connect(self.on_scan_finished)
         self.scan_worker.error.connect(self.on_scan_error)
         self.scan_worker.progress.connect(self.on_scan_progress)
@@ -238,10 +273,15 @@ class DiskPage(QWidget):
         # 启用按钮
         self.scan_btn.setEnabled(True)
         self.scan_btn.setText("开始扫描")
-        
+        self.cancel_btn.setEnabled(False)
+
         # 更新进度
-        self.scan_progress.setText(f"✅ 扫描完成，找到 {len(files)} 个文件")
-        engine.log("INFO", f"[磁盘分析] 大文件扫描完成: count={len(files)}")
+        if self.scan_worker and self.scan_worker.is_cancel_requested():
+            self.scan_progress.setText(f"⚠️ 扫描已取消，当前结果 {len(files)} 个文件")
+            engine.log("WARNING", f"[磁盘分析] 大文件扫描已取消: partial_count={len(files)}")
+        else:
+            self.scan_progress.setText(f"✅ 扫描完成，找到 {len(files)} 个文件")
+            engine.log("INFO", f"[磁盘分析] 大文件扫描完成: count={len(files)}")
         
         # 填充表格
         self.files_table.setRowCount(len(files))
@@ -261,6 +301,7 @@ class DiskPage(QWidget):
             action_layout.setContentsMargins(5, 5, 5, 5)
             
             open_btn = QPushButton("打开位置")
+            open_btn.setObjectName("SubtleButton")
             open_btn.clicked.connect(lambda checked, path=filepath: self.open_file_location(path))
             action_layout.addWidget(open_btn)
             
@@ -274,10 +315,31 @@ class DiskPage(QWidget):
         # 启用按钮
         self.scan_btn.setEnabled(True)
         self.scan_btn.setText("开始扫描")
+        self.cancel_btn.setEnabled(False)
         
         # 显示错误
         self.scan_progress.setText(f"❌ 扫描失败: {error_msg}")
         engine.log("ERROR", f"[磁盘分析] 大文件扫描失败: {error_msg}")
+
+    def cancel_scan(self):
+        """取消当前扫描。"""
+        if not self.scan_worker or not self.scan_worker.isRunning():
+            return
+        self.scan_worker.cancel()
+        self.cancel_btn.setEnabled(False)
+        self.scan_progress.setText("⚠️ 正在取消扫描...")
+        engine.log("WARNING", "[磁盘分析] 用户请求取消扫描")
+
+    def parse_min_size(self, text: str) -> int:
+        """解析最小文件大小设置。"""
+        mapping = {
+            "10 MB": 10 * 1024 * 1024,
+            "50 MB": 50 * 1024 * 1024,
+            "100 MB": 100 * 1024 * 1024,
+            "500 MB": 500 * 1024 * 1024,
+            "1 GB": 1024 * 1024 * 1024,
+        }
+        return mapping.get(text, 100 * 1024 * 1024)
         
     def open_file_location(self, filepath):
         """打开文件位置"""

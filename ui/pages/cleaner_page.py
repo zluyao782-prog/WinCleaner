@@ -65,11 +65,11 @@ class CleanerPage(QWidget):
     
     def __init__(self):
         super().__init__()
+        self.is_active = False
         self.worker = None
         self.scan_results = {}
         self.result_checkboxes = {}
         self.init_ui()
-        self.refresh()
         
     def init_ui(self):
         """初始化UI"""
@@ -107,8 +107,10 @@ class CleanerPage(QWidget):
         # 全选/全不选
         select_layout = QHBoxLayout()
         select_all_btn = QPushButton("全选")
+        select_all_btn.setObjectName("SubtleButton")
         select_all_btn.clicked.connect(self.select_all)
         select_none_btn = QPushButton("全不选")
+        select_none_btn.setObjectName("SubtleButton")
         select_none_btn.clicked.connect(self.select_none)
         
         select_layout.addWidget(select_all_btn)
@@ -117,8 +119,8 @@ class CleanerPage(QWidget):
         
         # 扫描按钮
         self.scan_btn = QPushButton("扫描垃圾文件")
+        self.scan_btn.setObjectName("PrimaryButton")
         self.scan_btn.clicked.connect(self.start_scan)
-        self.scan_btn.setStyleSheet("QPushButton { background-color: #2E75B6; color: white; font-weight: bold; }")
         select_layout.addWidget(self.scan_btn)
         
         category_layout.addLayout(select_layout)
@@ -174,9 +176,9 @@ class CleanerPage(QWidget):
         clean_layout.addStretch()
         
         self.clean_btn = QPushButton("清理选中项")
+        self.clean_btn.setObjectName("DangerButton")
         self.clean_btn.clicked.connect(self.start_clean)
         self.clean_btn.setEnabled(False)
-        self.clean_btn.setStyleSheet("QPushButton { background-color: #C00000; color: white; font-weight: bold; }")
         clean_layout.addWidget(self.clean_btn)
         
         results_layout.addLayout(clean_layout)
@@ -192,6 +194,7 @@ class CleanerPage(QWidget):
         recycle_layout.addStretch()
         
         self.empty_recycle_btn = QPushButton("清空回收站")
+        self.empty_recycle_btn.setObjectName("DangerButton")
         self.empty_recycle_btn.clicked.connect(self.empty_recycle)
         recycle_layout.addWidget(self.empty_recycle_btn)
         
@@ -211,7 +214,15 @@ class CleanerPage(QWidget):
         
     def refresh(self):
         """刷新页面"""
+        if not self.is_active:
+            return
         self.update_recycle_size()
+
+    def set_active(self, active: bool):
+        """统一页面激活入口。"""
+        self.is_active = active
+        if active:
+            self.refresh()
         
     def update_recycle_size(self):
         """更新回收站大小"""
