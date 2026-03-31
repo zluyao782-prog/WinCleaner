@@ -73,7 +73,7 @@ jobs:
       
     - name: Create release package
       run: |
-        $version = if ("${{ github.ref_type }}" -eq "tag") { "${{ github.ref_name }}" } else { "dev-${{ github.sha }}" }
+        $version = if ("${{ github.ref_type }}" -eq "tag") { "${{ github.ref_name }}" } else { "${{ github.sha }}" }
         $packageName = "WinCleaner_$version"
         
         # Create release directory
@@ -133,9 +133,9 @@ Python version: 3.11
     - name: Upload build artifacts
       uses: actions/upload-artifact@v4
       with:
-        name: WinCleaner-${{ github.ref_type == 'tag' && github.ref_name || format('dev-{0}', github.sha) }}
+        name: WinCleaner-${{ github.ref_type == 'tag' && github.ref_name || github.sha }}
         path: |
-          WinCleaner_${{ github.ref_type == 'tag' && github.ref_name || format('dev-{0}', github.sha) }}.zip
+          WinCleaner_${{ github.ref_type == 'tag' && github.ref_name || github.sha }}.zip
           dist/WinCleaner.exe
           README.md
           发布说明.md
@@ -155,6 +155,6 @@ Python version: 3.11
         Write-Host "  2. Click on this workflow run"
         Write-Host "  3. Download artifacts from the bottom"
         Write-Host ""
-        Write-Host "Version: ${{ github.ref_type == 'tag' && github.ref_name || format('dev-{0}', github.sha) }}"
+        Write-Host "Version: ${{ github.ref_type == 'tag' && github.ref_name || github.sha }}"
         Write-Host "File size: ${{ steps.build_info.outputs.BUILD_SIZE }}"
       shell: powershell
