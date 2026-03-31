@@ -6,6 +6,10 @@
 ![Platform](https://img.shields.io/badge/Platform-Windows%2010%2F11-lightgrey?style=for-the-badge)
 ![License](https://img.shields.io/badge/License-Educational-green?style=for-the-badge)
 
+![Build Status](https://github.com/zluyao782-prog/WinCleaner/workflows/CI%2FCD%20Pipeline/badge.svg)
+![Windows Build](https://github.com/zluyao782-prog/WinCleaner/workflows/Build%20Windows%20Release/badge.svg)
+![Release](https://github.com/zluyao782-prog/WinCleaner/workflows/Create%20Release/badge.svg)
+
 **🧹 专业的Windows系统清理和优化工具，让您的电脑重获新生**
 
 [功能特色](#-功能特色) • [快速开始](#-快速开始) • [系统要求](#-系统要求) • [安全提示](#️-安全提示) • [技术架构](#️-技术架构)

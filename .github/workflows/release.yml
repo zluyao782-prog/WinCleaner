@@ -1,0 +1,214 @@
+name: Create Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release version (e.g., v1.0.1)'
+        required: true
+        default: 'v1.0.1'
+
+jobs:
+  create-release:
+    runs-on: windows-latest
+    name: Create Release Package
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+        
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        
+    - name: Get version
+      id: get_version
+      run: |
+        if ("${{ github.event.inputs.version }}" -ne "") {
+          $version = "${{ github.event.inputs.version }}"
+        } else {
+          $version = "${{ github.ref_name }}"
+        }
+        echo "VERSION=$version" >> $env:GITHUB_OUTPUT
+        echo "Version: $version"
+      shell: powershell
+      
+    - name: Update version info
+      run: |
+        $version = "${{ steps.get_version.outputs.VERSION }}"
+        $versionNum = $version -replace '^v', ''
+        $versionParts = $versionNum -split '\.'
+        while ($versionParts.Length -lt 4) { $versionParts += "0" }
+        $fileVersion = $versionParts -join ','
+        
+        # Update version_info.txt
+        $content = Get-Content version_info.txt -Raw
+        $content = $content -replace 'filevers=\([\d,]+\)', "filevers=($fileVersion)"
+        $content = $content -replace 'prodvers=\([\d,]+\)', "prodvers=($fileVersion)"
+        $content = $content -replace "u'FileVersion', u'[\d\.]+'", "u'FileVersion', u'$versionNum'"
+        $content = $content -replace "u'ProductVersion', u'[\d\.]+'", "u'ProductVersion', u'$versionNum'"
+        Set-Content version_info.txt $content
+        
+        Write-Host "Updated version to: $versionNum"
+      shell: powershell
+      
+    - name: Create logs directory
+      run: mkdir logs
+      
+    - name: Build WinCleaner
+      run: |
+        pyinstaller --onefile --windowed --uac-admin ^
+          --name WinCleaner ^
+          --icon assets\app.ico ^
+          --add-data "config;config" ^
+          --version-file version_info.txt ^
+          --distpath dist ^
+          --workpath build ^
+          --specpath . ^
+          --clean ^
+          main.py
+      shell: cmd
+      
+    - name: Verify build and get info
+      id: build_info
+      run: |
+        if (Test-Path "dist\WinCleaner.exe") {
+          Write-Host "✅ Build successful!"
+          $size = (Get-Item "dist\WinCleaner.exe").Length
+          $sizeMB = [math]::Round($size/1MB, 2)
+          Write-Host "📊 File size: $sizeMB MB"
+          echo "BUILD_SIZE=$sizeMB MB" >> $env:GITHUB_OUTPUT
+          echo "BUILD_SUCCESS=true" >> $env:GITHUB_OUTPUT
+        } else {
+          Write-Host "❌ Build failed - executable not found"
+          echo "BUILD_SUCCESS=false" >> $env:GITHUB_OUTPUT
+          exit 1
+        }
+      shell: powershell
+      
+    - name: Create release package
+      run: |
+        $version = "${{ steps.get_version.outputs.VERSION }}"
+        $packageName = "WinCleaner_$version"
+        
+        # Create release directory
+        New-Item -ItemType Directory -Path $packageName -Force
+        
+        # Copy executable
+        Copy-Item "dist\WinCleaner.exe" "$packageName\"
+        
+        # Copy documentation
+        Copy-Item "README.md" "$packageName\使用说明.md"
+        Copy-Item "发布说明.md" "$packageName\"
+        
+        # Create installation guide
+        $installGuide = @"
+# WinCleaner $version 安装指南
+
+## 快速开始
+1. 右键点击 WinCleaner.exe
+2. 选择"以管理员身份运行"
+3. 在UAC提示中点击"是"
+
+## 系统要求
+- Windows 10 (1903+) / Windows 11
+- 64位系统
+- 管理员权限
+
+## 重要提示
+- 程序需要管理员权限才能正常工作
+- 建议使用前备份重要数据
+- 禁用Windows更新可能带来安全风险
+
+## 技术支持
+如遇问题请查看 使用说明.md 或访问项目主页：
+https://github.com/zluyao782-prog/WinCleaner
+
+---
+版本: $version
+构建时间: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')
+文件大小: ${{ steps.build_info.outputs.BUILD_SIZE }}
+"@
+        
+        Set-Content "$packageName\安装指南.txt" $installGuide -Encoding UTF8
+        
+        # Create ZIP package
+        Compress-Archive -Path "$packageName\*" -DestinationPath "$packageName.zip"
+        
+        Write-Host "✅ Release package created: $packageName.zip"
+      shell: powershell
+      
+    - name: Upload release artifacts
+      uses: actions/upload-artifact@v3
+      with:
+        name: WinCleaner-Release-${{ steps.get_version.outputs.VERSION }}
+        path: |
+          WinCleaner_${{ steps.get_version.outputs.VERSION }}.zip
+          dist/WinCleaner.exe
+        retention-days: 90
+        
+    - name: Create GitHub Release
+      uses: softprops/action-gh-release@v1
+      with:
+        tag_name: ${{ steps.get_version.outputs.VERSION }}
+        name: WinCleaner ${{ steps.get_version.outputs.VERSION }}
+        files: |
+          WinCleaner_${{ steps.get_version.outputs.VERSION }}.zip
+          dist/WinCleaner.exe
+        body: |
+          ## 🎉 WinCleaner ${{ steps.get_version.outputs.VERSION }} 发布
+          
+          ### 📥 下载说明
+          - **完整包**: `WinCleaner_${{ steps.get_version.outputs.VERSION }}.zip` (包含文档)
+          - **单文件**: `WinCleaner.exe` (仅可执行文件)
+          
+          ### 🚀 安装步骤
+          1. 下载 `WinCleaner.exe`
+          2. 右键选择"以管理员身份运行"
+          3. 在UAC提示中点击"是"
+          
+          ### ✨ 主要功能
+          - 🖥️ **系统信息监控** - 实时显示硬件信息和性能状态
+          - 🔄 **Windows更新控制** - 一键禁用/启用自动更新
+          - 💾 **磁盘空间分析** - 可视化磁盘使用情况和大文件扫描
+          - 🗑️ **智能垃圾清理** - 清理微信、QQ、浏览器等缓存文件
+          - ⚙️ **进程管理** - 实时监控和管理系统进程
+          
+          ### 📋 系统要求
+          - Windows 10 (1903+) / Windows 11 (64位)
+          - 管理员权限
+          - 至少 50MB 可用磁盘空间
+          
+          ### ⚠️ 重要提示
+          - 需要管理员权限才能正常工作
+          - 建议使用前备份重要数据
+          - 禁用Windows更新可能带来安全风险
+          - 系统关键进程受保护，无法终止
+          
+          ### 📊 构建信息
+          - 文件大小: ${{ steps.build_info.outputs.BUILD_SIZE }}
+          - 构建环境: Windows Server 2022
+          - Python版本: 3.11
+          - 打包工具: PyInstaller
+          
+          ### 🔗 相关链接
+          - [项目主页](https://github.com/zluyao782-prog/WinCleaner)
+          - [使用说明](https://github.com/zluyao782-prog/WinCleaner#readme)
+          - [问题反馈](https://github.com/zluyao782-prog/WinCleaner/issues)
+          
+          ---
+          
+          **如果这个项目对您有帮助，请给它一个 ⭐ Star！**
+        draft: false
+        prerelease: false
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

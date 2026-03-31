@@ -1,0 +1,116 @@
+name: Build Windows Release
+
+on:
+  push:
+    branches: [ main ]
+    tags: [ 'v*' ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+        
+    - name: Cache pip dependencies
+      uses: actions/cache@v3
+      with:
+        path: ~\AppData\Local\pip\Cache
+        key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
+        restore-keys: |
+          ${{ runner.os }}-pip-
+          
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        
+    - name: Create logs directory
+      run: mkdir logs
+      
+    - name: Build with PyInstaller
+      run: |
+        pyinstaller --onefile --windowed --uac-admin ^
+          --name WinCleaner ^
+          --icon assets\app.ico ^
+          --add-data "config;config" ^
+          --version-file version_info.txt ^
+          --distpath dist ^
+          --workpath build ^
+          --specpath . ^
+          --clean ^
+          main.py
+      shell: cmd
+      
+    - name: Verify build
+      run: |
+        if (Test-Path "dist\WinCleaner.exe") {
+          Write-Host "✅ Build successful!"
+          $size = (Get-Item "dist\WinCleaner.exe").Length
+          Write-Host "📊 File size: $([math]::Round($size/1MB, 2)) MB"
+        } else {
+          Write-Host "❌ Build failed - executable not found"
+          exit 1
+        }
+      shell: powershell
+      
+    - name: Upload build artifacts
+      uses: actions/upload-artifact@v3
+      with:
+        name: WinCleaner-Windows-${{ github.sha }}
+        path: |
+          dist/WinCleaner.exe
+          README.md
+          发布说明.md
+        retention-days: 30
+        
+    - name: Create Release (on tag)
+      if: startsWith(github.ref, 'refs/tags/v')
+      uses: softprops/action-gh-release@v1
+      with:
+        files: |
+          dist/WinCleaner.exe
+        name: WinCleaner ${{ github.ref_name }}
+        body: |
+          ## WinCleaner ${{ github.ref_name }} - Windows 系统清理工具
+          
+          ### 🎉 新版本发布
+          
+          **下载说明：**
+          - 下载 `WinCleaner.exe`
+          - 右键选择"以管理员身份运行"
+          - 在UAC提示中点击"是"
+          
+          ### ✨ 主要功能
+          - 🖥️ 系统信息监控
+          - 🔄 Windows更新控制
+          - 💾 磁盘空间分析
+          - 🗑️ 智能垃圾清理
+          - ⚙️ 进程管理
+          
+          ### ⚠️ 重要提示
+          - 需要管理员权限运行
+          - 建议使用前备份重要数据
+          - 禁用Windows更新可能带来安全风险
+          
+          ### 📋 系统要求
+          - Windows 10 (1903+) / Windows 11
+          - 64位系统
+          - 管理员权限
+          
+          ---
+          
+          **完整源代码和文档请查看仓库主页**
+        draft: false
+        prerelease: false
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
