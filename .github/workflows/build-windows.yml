@@ -58,14 +58,14 @@ jobs:
       id: build_info
       run: |
         if (Test-Path "dist\WinCleaner.exe") {
-          Write-Host "✅ Build successful!"
+          Write-Host "Build successful!"
           $size = (Get-Item "dist\WinCleaner.exe").Length
           $sizeMB = [math]::Round($size/1MB, 2)
-          Write-Host "📦 File size: $sizeMB MB"
+          Write-Host "File size: $sizeMB MB"
           echo "BUILD_SIZE=$sizeMB MB" >> $env:GITHUB_OUTPUT
           echo "BUILD_SUCCESS=true" >> $env:GITHUB_OUTPUT
         } else {
-          Write-Host "❌ Build failed - executable not found"
+          Write-Host "Build failed - executable not found"
           echo "BUILD_SUCCESS=false" >> $env:GITHUB_OUTPUT
           exit 1
         }
@@ -93,22 +93,22 @@ jobs:
         $installGuide = @"
 # WinCleaner $version Installation Guide
 
-## 🚀 Quick Start
+## Quick Start
 1. Right-click WinCleaner.exe
 2. Select "Run as administrator"
 3. Click "Yes" in UAC prompt
 
-## � System Requirements
+## System Requirements
 - Windows 10 (1903+) / Windows 11 (64-bit)
 - Administrator privileges
 - At least 50MB free disk space
 
-## ⚠️ Important Notes
+## Important Notes
 - Administrator privileges required for full functionality
 - Backup important data before use
 - Disabling Windows updates may pose security risks
 
-## 🔧 Technical Support
+## Technical Support
 For issues, see User-Guide.md or visit:
 https://github.com/zluyao782-prog/WinCleaner
 
@@ -125,8 +125,8 @@ Python version: 3.11
         # Create ZIP package
         Compress-Archive -Path "$packageName\*" -DestinationPath "$packageName.zip"
         
-        Write-Host "📦 Release package created: $packageName.zip"
-        Write-Host "📁 Package contents:"
+        Write-Host "Release package created: $packageName.zip"
+        Write-Host "Package contents:"
         Get-ChildItem $packageName | ForEach-Object { Write-Host "  - $($_.Name)" }
       shell: powershell
       
@@ -143,18 +143,18 @@ Python version: 3.11
         
     - name: Build Summary
       run: |
-        Write-Host "🎉 Build completed successfully!"
+        Write-Host "Build completed successfully!"
         Write-Host ""
-        Write-Host "📦 Artifacts uploaded:"
+        Write-Host "Artifacts uploaded:"
         Write-Host "  - WinCleaner.exe (executable)"
         Write-Host "  - WinCleaner_*.zip (complete package)"
         Write-Host "  - Documentation files"
         Write-Host ""
-        Write-Host "📥 To download:"
+        Write-Host "To download:"
         Write-Host "  1. Go to Actions tab in GitHub"
         Write-Host "  2. Click on this workflow run"
         Write-Host "  3. Download artifacts from the bottom"
         Write-Host ""
-        Write-Host "🏷️ Version: ${{ github.ref_type == 'tag' && github.ref_name || format('dev-{0}', github.sha) }}"
-        Write-Host "📊 File size: ${{ steps.build_info.outputs.BUILD_SIZE }}"
+        Write-Host "Version: ${{ github.ref_type == 'tag' && github.ref_name || format('dev-{0}', github.sha) }}"
+        Write-Host "File size: ${{ steps.build_info.outputs.BUILD_SIZE }}"
       shell: powershell
