@@ -88,39 +88,32 @@ jobs:
           Copy-Item "发布说明.md" "$packageName\Release-Notes.md"
         }
         
-        # Create installation guide
+        # Create installation guide using Out-File
         $buildSize = "${{ steps.build_info.outputs.BUILD_SIZE }}"
-        $installGuide = @'
-# WinCleaner $version Installation Guide
-
-## Quick Start
-1. Right-click WinCleaner.exe
-2. Select "Run as administrator"
-3. Click "Yes" in UAC prompt
-
-## System Requirements
-- Windows 10 (1903+) / Windows 11 (64-bit)
-- Administrator privileges
-- At least 50MB free disk space
-
-## Important Notes
-- Administrator privileges required for full functionality
-- Backup important data before use
-- Disabling Windows updates may pose security risks
-
-## Technical Support
-For issues, see User-Guide.md or visit:
-https://github.com/zluyao782-prog/WinCleaner
-
----
-Version: $version
-Build time: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')
-File size: $buildSize
-Build environment: Windows Server 2022
-Python version: 3.11
-'@
+        $guideContent = "# WinCleaner $version Installation Guide`n`n"
+        $guideContent += "## Quick Start`n"
+        $guideContent += "1. Right-click WinCleaner.exe`n"
+        $guideContent += "2. Select 'Run as administrator'`n"
+        $guideContent += "3. Click 'Yes' in UAC prompt`n`n"
+        $guideContent += "## System Requirements`n"
+        $guideContent += "- Windows 10 (1903+) / Windows 11 (64-bit)`n"
+        $guideContent += "- Administrator privileges`n"
+        $guideContent += "- At least 50MB free disk space`n`n"
+        $guideContent += "## Important Notes`n"
+        $guideContent += "- Administrator privileges required for full functionality`n"
+        $guideContent += "- Backup important data before use`n"
+        $guideContent += "- Disabling Windows updates may pose security risks`n`n"
+        $guideContent += "## Technical Support`n"
+        $guideContent += "For issues, see User-Guide.md or visit:`n"
+        $guideContent += "https://github.com/zluyao782-prog/WinCleaner`n`n"
+        $guideContent += "---`n"
+        $guideContent += "Version: $version`n"
+        $guideContent += "Build time: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')`n"
+        $guideContent += "File size: $buildSize`n"
+        $guideContent += "Build environment: Windows Server 2022`n"
+        $guideContent += "Python version: 3.11"
         
-        Set-Content "$packageName\Installation-Guide.txt" $installGuide -Encoding UTF8
+        $guideContent | Out-File -FilePath "$packageName\Installation-Guide.txt" -Encoding UTF8
         
         # Create ZIP package
         Compress-Archive -Path "$packageName\*" -DestinationPath "$packageName.zip"

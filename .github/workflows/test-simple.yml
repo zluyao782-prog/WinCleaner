@@ -23,14 +23,12 @@ jobs:
         Write-Host "Ref type: ${{ github.ref_type }}"
       shell: powershell
       
-    - name: Test Here-String
+    - name: Test Here-String Alternative
       run: |
         $version = "${{ github.ref_name }}"
-        $content = @'
-# Test Installation Guide
-Version: $version
-This is a test file.
-'@
+        $content = "# Test Installation Guide`n"
+        $content += "Version: $version`n"
+        $content += "This is a test file."
         Write-Host "Content created successfully"
         Write-Host $content
       shell: powershell
