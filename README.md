@@ -145,6 +145,23 @@ pip install -r requirements.txt
 - **Windows**: 运行 `build.bat`
 - **Unix系统**: 运行 `./build.sh` (功能受限)
 
+### 发布流程
+1. 确保本地改动已经提交，并且 `main` 分支内容可发布。
+2. 创建并推送版本标签，例如 `git tag v1.0.1` 和 `git push origin v1.0.1`。
+3. GitHub Actions 会自动执行 `Build Windows Release` 工作流：
+   - 安装依赖
+   - 执行 Python 语法校验
+   - 运行 `tests/` 下的单元测试
+   - 使用 PyInstaller 构建 `WinCleaner.exe`
+   - 生成 ZIP 发布包并上传到 workflow artifacts
+   - 将 ZIP、`WinCleaner.exe`、`README.md`、`发布说明.md` 发布到 GitHub Release
+4. 构建完成后，前往 GitHub 仓库的 Releases 页面下载正式发布资产。
+
+建议：
+- 标签命名统一使用 `v*`，例如 `v1.0.1`
+- 发布前先在本地执行 `python -m unittest discover -s tests -p "test_*.py"`
+- 如需更新发布说明，优先修改 `发布说明.md`
+
 ## 📋 版本历史
 
 - **v1.0** (2026-03-31): 初始版本
