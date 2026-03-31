@@ -90,7 +90,7 @@ jobs:
         
         # Create installation guide
         $buildSize = "${{ steps.build_info.outputs.BUILD_SIZE }}"
-        $installGuide = @"
+        $installGuide = @'
 # WinCleaner $version Installation Guide
 
 ## Quick Start
@@ -118,7 +118,7 @@ Build time: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')
 File size: $buildSize
 Build environment: Windows Server 2022
 Python version: 3.11
-"@
+'@
         
         Set-Content "$packageName\Installation-Guide.txt" $installGuide -Encoding UTF8
         
