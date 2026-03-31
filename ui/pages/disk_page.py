@@ -13,6 +13,7 @@ from PyQt6.QtCore import Qt, QThread, pyqtSignal
 from PyQt6.QtGui import QFont
 
 from core.disk import get_disk_usage, scan_large_files, format_size
+from core.engine import engine
 import os
 
 
@@ -153,6 +154,7 @@ class DiskPage(QWidget):
     def refresh_disk_usage(self):
         """刷新磁盘使用情况"""
         try:
+            engine.log("INFO", "[磁盘分析] 刷新磁盘使用情况")
             disk_info = get_disk_usage()
             
             self.disk_table.setRowCount(len(disk_info))
@@ -195,7 +197,9 @@ class DiskPage(QWidget):
                 self.disk_table.setCellWidget(i, 5, usage_widget)
                 
         except Exception as e:
-            print(f"刷新磁盘信息失败: {e}")
+            from logging import getLogger
+            getLogger(__name__).warning("刷新磁盘信息失败: %s", e)
+            engine.log("ERROR", f"[磁盘分析] 刷新磁盘信息失败: {e}")
             
     def start_scan(self):
         """开始扫描大文件"""
@@ -205,6 +209,7 @@ class DiskPage(QWidget):
         path = self.path_combo.currentText().strip()
         if not path or not os.path.exists(path):
             self.scan_progress.setText("❌ 路径不存在")
+            engine.log("WARNING", f"[磁盘分析] 扫描路径不存在: {path}")
             return
             
         count = self.count_spin.value()
@@ -217,6 +222,7 @@ class DiskPage(QWidget):
         self.files_table.setRowCount(0)
         
         # 启动扫描线程
+        engine.log("INFO", f"[磁盘分析] 开始扫描大文件: path={path}, top_n={count}")
         self.scan_worker = DiskScanWorker(path, count)
         self.scan_worker.finished.connect(self.on_scan_finished)
         self.scan_worker.error.connect(self.on_scan_error)
@@ -235,6 +241,7 @@ class DiskPage(QWidget):
         
         # 更新进度
         self.scan_progress.setText(f"✅ 扫描完成，找到 {len(files)} 个文件")
+        engine.log("INFO", f"[磁盘分析] 大文件扫描完成: count={len(files)}")
         
         # 填充表格
         self.files_table.setRowCount(len(files))
@@ -270,11 +277,15 @@ class DiskPage(QWidget):
         
         # 显示错误
         self.scan_progress.setText(f"❌ 扫描失败: {error_msg}")
+        engine.log("ERROR", f"[磁盘分析] 大文件扫描失败: {error_msg}")
         
     def open_file_location(self, filepath):
         """打开文件位置"""
         try:
             import subprocess
             subprocess.run(["explorer", "/select,", filepath])
+            engine.log("INFO", f"[磁盘分析] 打开文件位置: {filepath}")
         except Exception as e:
-            print(f"打开文件位置失败: {e}")
+            from logging import getLogger
+            getLogger(__name__).warning("打开文件位置失败: %s", e)
+            engine.log("ERROR", f"[磁盘分析] 打开文件位置失败: {e}")

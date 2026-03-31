@@ -4,16 +4,19 @@
 垃圾清理模块：按软件类别扫描缓存文件，先预览后确认，再执行删除
 """
 
+import json
+import logging
 import os
-import shutil
 import glob
+import re
 from pathlib import Path
-from typing import Dict, List, Tuple
+from typing import Dict, List, Set, Tuple
 import tempfile
 
+logger = logging.getLogger(__name__)
+CONFIG_PATH = Path(__file__).resolve().parent.parent / "config" / "junk_profiles.json"
 
-# 垃圾文件清理配置
-JUNK_PROFILES = {
+DEFAULT_JUNK_PROFILES = {
     "系统临时文件": [
         os.path.join(tempfile.gettempdir(), "*"),
         r"C:\Windows\Temp\*",
@@ -50,6 +53,58 @@ JUNK_PROFILES = {
 }
 
 
+def _expand_pattern(pattern: str) -> str:
+    expanded = os.path.expandvars(pattern)
+
+    def replace_percent_var(match):
+        return os.environ.get(match.group(1), match.group(0))
+
+    return re.sub(r"%([^%]+)%", replace_percent_var, expanded)
+
+
+def load_junk_profiles() -> Dict[str, List[str]]:
+    """从配置文件加载垃圾清理规则。"""
+    try:
+        with CONFIG_PATH.open("r", encoding="utf-8") as f:
+            raw_profiles = json.load(f)
+        return {
+            category: [_expand_pattern(pattern) for pattern in patterns]
+            for category, patterns in raw_profiles.items()
+            if isinstance(patterns, list)
+        }
+    except Exception as e:
+        logger.warning("加载垃圾清理配置失败，使用内置默认配置: %s", e)
+        return DEFAULT_JUNK_PROFILES.copy()
+
+
+JUNK_PROFILES = load_junk_profiles()
+
+
+def _normalize_path(file_path: str) -> str:
+    normalized = os.path.normcase(os.path.abspath(file_path))
+    return normalized.replace("/", "\\")
+
+
+def _build_allowed_roots(patterns: List[str]) -> Set[str]:
+    roots = set()
+    for pattern in patterns:
+        wildcard_positions = [idx for idx in (pattern.find("*"), pattern.find("?")) if idx != -1]
+        wildcard_index = min(wildcard_positions) if wildcard_positions else -1
+        prefix = pattern if wildcard_index == -1 else pattern[:wildcard_index]
+        prefix = prefix.rstrip("\\/")
+        if prefix:
+            roots.add(_normalize_path(prefix))
+    return roots
+
+
+def _is_path_allowed(file_path: str, allowed_roots: Set[str]) -> bool:
+    normalized = _normalize_path(file_path)
+    return any(
+        normalized == root or normalized.startswith(root + "\\")
+        for root in allowed_roots
+    )
+
+
 def scan_junk(categories: List[str]) -> Dict[str, Dict]:
     """扫描垃圾文件
     
@@ -66,30 +121,42 @@ def scan_junk(categories: List[str]) -> Dict[str, Dict]:
             continue
             
         files = []
+        seen_files = set()
         total_size = 0
         
         for pattern in JUNK_PROFILES[category]:
             try:
-                # 使用glob匹配文件
                 matched_files = glob.glob(pattern, recursive=True)
                 
                 for file_path in matched_files:
                     try:
                         if os.path.isfile(file_path):
+                            normalized = _normalize_path(file_path)
+                            if normalized in seen_files:
+                                continue
                             size = os.path.getsize(file_path)
                             files.append(file_path)
+                            seen_files.add(normalized)
                             total_size += size
                         elif os.path.isdir(file_path):
-                            # 对于目录，计算其总大小
-                            dir_size = get_directory_size(file_path)
-                            files.append(file_path)
-                            total_size += dir_size
+                            for root, _, filenames in os.walk(file_path):
+                                for filename in filenames:
+                                    nested_file = os.path.join(root, filename)
+                                    normalized = _normalize_path(nested_file)
+                                    if normalized in seen_files:
+                                        continue
+                                    try:
+                                        size = os.path.getsize(nested_file)
+                                    except (OSError, PermissionError):
+                                        continue
+                                    files.append(nested_file)
+                                    seen_files.add(normalized)
+                                    total_size += size
                     except (OSError, PermissionError):
-                        # 跳过无法访问的文件
                         continue
                         
             except Exception as e:
-                print(f"扫描模式 {pattern} 失败: {e}")
+                logger.warning("扫描模式失败: %s - %s", pattern, e)
                 continue
                 
         result[category] = {
@@ -110,23 +177,32 @@ def clean_junk(files: List[str]) -> Tuple[int, int]:
     Returns:
         Tuple[int, int]: (成功删除数, 失败数)
     """
+    allowed_roots = set()
+    for patterns in JUNK_PROFILES.values():
+        allowed_roots.update(_build_allowed_roots(patterns))
+
     success_count = 0
     failed_count = 0
+    deleted_files = set()
     
     for file_path in files:
         try:
+            normalized = _normalize_path(file_path)
+            if normalized in deleted_files:
+                continue
+            if not _is_path_allowed(file_path, allowed_roots):
+                logger.warning("拒绝删除未授权路径: %s", file_path)
+                failed_count += 1
+                continue
             if os.path.isfile(file_path):
                 os.remove(file_path)
-                success_count += 1
-            elif os.path.isdir(file_path):
-                shutil.rmtree(file_path, ignore_errors=True)
+                deleted_files.add(normalized)
                 success_count += 1
             else:
-                # 文件不存在，可能已被删除
                 continue
                 
         except Exception as e:
-            print(f"删除文件 {file_path} 失败: {e}")
+            logger.warning("删除文件失败: %s - %s", file_path, e)
             failed_count += 1
             
     return success_count, failed_count
@@ -152,7 +228,7 @@ def get_directory_size(path: str) -> int:
                 except (OSError, PermissionError):
                     continue
     except Exception as e:
-        print(f"计算目录 {path} 大小失败: {e}")
+        logger.warning("计算目录大小失败: %s - %s", path, e)
         
     return total_size
 
@@ -181,7 +257,7 @@ def get_recycle_bin_size() -> int:
         return total_size
         
     except Exception as e:
-        print(f"获取回收站大小失败: {e}")
+        logger.warning("获取回收站大小失败: %s", e)
         return 0
 
 
@@ -211,7 +287,7 @@ def empty_recycle_bin() -> bool:
         return result == 0  # S_OK
         
     except Exception as e:
-        print(f"清空回收站失败: {e}")
+        logger.warning("清空回收站失败: %s", e)
         return False
 
 
@@ -260,7 +336,7 @@ def scan_duplicate_files(path: str, min_size: int = 1024*1024) -> Dict[str, List
                     continue
                     
     except Exception as e:
-        print(f"扫描重复文件失败: {e}")
+        logger.warning("扫描重复文件失败: %s", e)
         
     return duplicates
 

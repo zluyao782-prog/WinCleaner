@@ -4,8 +4,11 @@
 更新控制模块：通过注册表策略 + 服务控制双路径停用或恢复自动更新
 """
 
+import logging
 import subprocess
 from typing import List, Dict
+
+logger = logging.getLogger(__name__)
 
 try:
     import winreg
@@ -28,7 +31,7 @@ def set_windows_update(enable: bool) -> bool:
         bool: 操作是否成功
     """
     if not WINREG_AVAILABLE:
-        print("Windows注册表模块不可用")
+        logger.warning("Windows注册表模块不可用")
         return False
         
     key_path = r"SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate\AU"
@@ -64,7 +67,7 @@ def set_windows_update(enable: bool) -> bool:
         return True
         
     except Exception as e:
-        print(f"设置更新策略失败: {e}")
+        logger.warning("设置更新策略失败: %s", e)
         return False
 
 
@@ -93,7 +96,7 @@ def get_update_service_status() -> Dict[str, str]:
                 status[service] = "不存在"
                 
         except Exception as e:
-            print(f"查询服务 {service} 状态失败: {e}")
+            logger.warning("查询服务状态失败: service=%s error=%s", service, e)
             status[service] = "查询失败"
             
     return status
@@ -128,10 +131,10 @@ def stop_update_services() -> List[str]:
             # 如果配置失败，记录到失败列表
             if config_result.returncode != 0:
                 failed.append(service)
-                print(f"禁用服务 {service} 失败: {config_result.stderr}")
+                logger.warning("禁用服务失败: service=%s error=%s", service, config_result.stderr.strip())
                 
         except Exception as e:
-            print(f"操作服务 {service} 失败: {e}")
+            logger.warning("操作服务失败: service=%s error=%s", service, e)
             failed.append(service)
             
     return failed
@@ -165,14 +168,13 @@ def restore_update_services() -> List[str]:
                 )
                 
                 if start_result.returncode != 0:
-                    # 启动失败不一定是错误，可能服务已在运行
-                    print(f"启动服务 {service}: {start_result.stderr}")
+                    logger.info("启动服务返回非零: service=%s message=%s", service, start_result.stderr.strip())
             else:
                 failed.append(service)
-                print(f"配置服务 {service} 失败: {config_result.stderr}")
+                logger.warning("配置服务失败: service=%s error=%s", service, config_result.stderr.strip())
                 
         except Exception as e:
-            print(f"恢复服务 {service} 失败: {e}")
+            logger.warning("恢复服务失败: service=%s error=%s", service, e)
             failed.append(service)
             
     return failed

@@ -17,6 +17,7 @@ from core.update_ctrl import (
     enable_windows_update
 )
 from core.sysinfo import get_update_status
+from core.engine import engine
 
 
 class UpdateWorker(QThread):
@@ -35,6 +36,7 @@ class UpdateWorker(QThread):
                 result = enable_windows_update()
             else:
                 result = disable_windows_update()
+            result["requested_action"] = "启用" if self.enable else "禁用"
             self.finished.emit(result)
         except Exception as e:
             self.error.emit(str(e))
@@ -259,7 +261,7 @@ class UpdatePage(QWidget):
         
         # 处理结果
         if result.get("success", False):
-            action = "启用" if result.get("policy_success") else "禁用"
+            action = result.get("requested_action", "执行")
             self.log(f"✅ {action}Windows更新成功")
             
             if result.get("service_failures"):
@@ -298,6 +300,7 @@ class UpdatePage(QWidget):
         from datetime import datetime
         timestamp = datetime.now().strftime("%H:%M:%S")
         self.log_text.append(f"[{timestamp}] {message}")
+        engine.log("INFO", f"[更新控制] {message}")
         
         # 滚动到底部
         cursor = self.log_text.textCursor()

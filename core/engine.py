@@ -8,8 +8,23 @@ import logging
 import os
 import threading
 from datetime import datetime
-from typing import Any, Callable, Dict, List
+from typing import Any, Callable
 from PyQt6.QtCore import QObject, pyqtSignal
+
+
+class UILogHandler(logging.Handler):
+    """将标准 logging 事件转发到 Qt 信号。"""
+
+    def __init__(self, signal):
+        super().__init__()
+        self.signal = signal
+
+    def emit(self, record):
+        try:
+            message = self.format(record)
+            self.signal.emit(record.levelname, message)
+        except Exception:
+            self.handleError(record)
 
 
 class CoreEngine(QObject):
@@ -44,6 +59,10 @@ class CoreEngine(QObject):
             ]
         )
         self.logger = logging.getLogger(__name__)
+        self.ui_handler = UILogHandler(self.log_message)
+        self.ui_handler.setLevel(logging.INFO)
+        self.ui_handler.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s - %(message)s'))
+        logging.getLogger().addHandler(self.ui_handler)
         
     def log(self, level: str, message: str):
         """记录日志"""
@@ -55,9 +74,6 @@ class CoreEngine(QObject):
             self.logger.error(message)
         elif level.upper() == "DEBUG":
             self.logger.debug(message)
-            
-        # 发送信号到UI
-        self.log_message.emit(level, message)
         
     def execute_task(self, task_name: str, func: Callable, *args, **kwargs) -> Any:
         """执行任务"""

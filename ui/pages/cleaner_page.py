@@ -4,10 +4,14 @@
 垃圾清理页面
 """
 
+import os
+import subprocess
+
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QGridLayout,
     QLabel, QFrame, QPushButton, QTableWidget, QTableWidgetItem,
-    QGroupBox, QCheckBox, QTextEdit, QProgressBar, QMessageBox
+    QGroupBox, QCheckBox, QTextEdit, QProgressBar, QMessageBox,
+    QHeaderView
 )
 from PyQt6.QtCore import Qt, QThread, pyqtSignal
 from PyQt6.QtGui import QFont
@@ -17,6 +21,7 @@ from core.cleaner import (
     get_recycle_bin_size, empty_recycle_bin
 )
 from core.disk import format_size
+from core.engine import engine
 
 
 class CleanWorker(QThread):
@@ -62,6 +67,7 @@ class CleanerPage(QWidget):
         super().__init__()
         self.worker = None
         self.scan_results = {}
+        self.result_checkboxes = {}
         self.init_ui()
         self.refresh()
         
@@ -150,13 +156,16 @@ class CleanerPage(QWidget):
         self.results_table.setHorizontalHeaderLabels([
             "类别", "文件数量", "占用空间", "操作"
         ])
+        self.results_table.verticalHeader().setVisible(False)
         
         # 设置列宽
         self.results_table.setColumnWidth(0, 150)
         self.results_table.setColumnWidth(1, 100)
         self.results_table.setColumnWidth(2, 120)
         header = self.results_table.horizontalHeader()
-        header.setStretchLastSection(True)
+        header.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
+        header.setStretchLastSection(False)
+        header.setSectionResizeMode(3, QHeaderView.ResizeMode.ResizeToContents)
         
         results_layout.addWidget(self.results_table)
         
@@ -211,7 +220,8 @@ class CleanerPage(QWidget):
             self.recycle_label.setText(f"回收站大小: {format_size(size)}")
         except Exception as e:
             self.recycle_label.setText("回收站大小: 获取失败")
-            print(f"获取回收站大小失败: {e}")
+            from logging import getLogger
+            getLogger(__name__).warning("获取回收站大小失败: %s", e)
             
     def select_all(self):
         """全选"""
@@ -257,14 +267,19 @@ class CleanerPage(QWidget):
         """开始清理"""
         if not self.scan_results:
             return
+
+        selected_categories = self.get_selected_result_categories()
+        if not selected_categories:
+            QMessageBox.warning(self, "提示", "请先勾选需要清理的扫描结果")
+            return
             
-        # 确认对话框
-        total_files = sum(result["count"] for result in self.scan_results.values())
-        total_size = sum(result["size_mb"] for result in self.scan_results.values())
+        total_files = sum(self.scan_results[category]["count"] for category in selected_categories)
+        total_size = sum(self.scan_results[category]["size_mb"] for category in selected_categories)
         
         reply = QMessageBox.question(
             self, "确认清理",
             f"确定要清理 {total_files} 个文件，释放 {total_size:.1f} MB 空间吗？\n\n"
+            f"已选择类别：{', '.join(selected_categories)}\n\n"
             "此操作不可撤销，请确认文件不再需要。",
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
             QMessageBox.StandardButton.No
@@ -275,8 +290,8 @@ class CleanerPage(QWidget):
             
         # 收集所有要清理的文件
         all_files = []
-        for result in self.scan_results.values():
-            all_files.extend(result["files"])
+        for category in selected_categories:
+            all_files.extend(self.scan_results[category]["files"])
             
         # 禁用按钮
         self.clean_btn.setEnabled(False)
@@ -336,43 +351,13 @@ class CleanerPage(QWidget):
         
         # 保存结果
         self.scan_results = results
+        self.result_checkboxes = {}
         
-        # 计算总计
-        total_files = sum(result["count"] for result in results.values())
-        total_size = sum(result["size_mb"] for result in results.values())
-        
-        # 更新进度
-        self.scan_progress.setText(f"✅ 扫描完成，找到 {total_files} 个文件，共 {total_size:.1f} MB")
-        
-        # 填充结果表格
-        self.results_table.setRowCount(len(results))
-        
-        for i, (category, result) in enumerate(results.items()):
-            # 类别
-            self.results_table.setItem(i, 0, QTableWidgetItem(category))
-            
-            # 文件数量
-            self.results_table.setItem(i, 1, QTableWidgetItem(str(result["count"])))
-            
-            # 占用空间
-            self.results_table.setItem(i, 2, QTableWidgetItem(f"{result['size_mb']:.1f} MB"))
-            
-            # 操作按钮
-            action_widget = QWidget()
-            action_layout = QHBoxLayout(action_widget)
-            action_layout.setContentsMargins(5, 5, 5, 5)
-            
-            view_btn = QPushButton("查看文件")
-            view_btn.clicked.connect(lambda checked, cat=category: self.view_files(cat))
-            action_layout.addWidget(view_btn)
-            
-            self.results_table.setCellWidget(i, 3, action_widget)
-            
-        # 启用清理按钮
-        if total_files > 0:
-            self.clean_btn.setEnabled(True)
+        self.refresh_results_table()
             
         # 记录日志
+        total_files = sum(result["count"] for result in results.values())
+        total_size = sum(result["size_mb"] for result in results.values())
         self.log(f"扫描完成：{len(results)} 个类别，{total_files} 个文件，{total_size:.1f} MB")
         
     def on_clean_finished(self, result):
@@ -391,6 +376,7 @@ class CleanerPage(QWidget):
         
         # 清空结果
         self.scan_results = {}
+        self.result_checkboxes = {}
         self.results_table.setRowCount(0)
         self.clean_btn.setEnabled(False)
         
@@ -435,7 +421,7 @@ class CleanerPage(QWidget):
         files = self.scan_results[category]["files"]
         
         # 创建文件列表对话框
-        from PyQt6.QtWidgets import QDialog, QListWidget
+        from PyQt6.QtWidgets import QAbstractItemView, QDialog, QListWidget
         
         dialog = QDialog(self)
         dialog.setWindowTitle(f"{category} - 文件列表")
@@ -444,6 +430,7 @@ class CleanerPage(QWidget):
         layout = QVBoxLayout(dialog)
         
         file_list = QListWidget()
+        file_list.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)
         for file_path in files[:100]:  # 最多显示100个
             file_list.addItem(file_path)
             
@@ -451,14 +438,121 @@ class CleanerPage(QWidget):
         
         if len(files) > 100:
             layout.addWidget(QLabel(f"... 还有 {len(files) - 100} 个文件"))
+
+        actions_layout = QHBoxLayout()
+        open_btn = QPushButton("打开位置")
+        exclude_btn = QPushButton("排除所选文件")
+        close_btn = QPushButton("关闭")
+
+        open_btn.clicked.connect(
+            lambda: self.open_selected_file_location(file_list.currentItem().text() if file_list.currentItem() else "")
+        )
+        exclude_btn.clicked.connect(
+            lambda: self.exclude_selected_files(category, file_list, dialog)
+        )
+        close_btn.clicked.connect(dialog.accept)
+
+        actions_layout.addWidget(open_btn)
+        actions_layout.addWidget(exclude_btn)
+        actions_layout.addStretch()
+        actions_layout.addWidget(close_btn)
+        layout.addLayout(actions_layout)
             
         dialog.exec()
+
+    def get_selected_result_categories(self):
+        """获取结果表格中勾选的类别。"""
+        return [
+            category for category, checkbox in self.result_checkboxes.items()
+            if checkbox.isChecked() and self.scan_results.get(category, {}).get("count", 0) > 0
+        ]
+
+    def refresh_results_table(self):
+        """根据当前扫描结果刷新表格统计。"""
+        total_files = sum(result["count"] for result in self.scan_results.values())
+        total_size = sum(result["size_mb"] for result in self.scan_results.values())
+        self.scan_progress.setText(f"✅ 扫描完成，找到 {total_files} 个文件，共 {total_size:.1f} MB")
+
+        self.results_table.setRowCount(len(self.scan_results))
+        for i, (category, result) in enumerate(self.scan_results.items()):
+            category_widget = QWidget()
+            category_layout = QHBoxLayout(category_widget)
+            category_layout.setContentsMargins(5, 0, 5, 0)
+
+            checkbox = self.result_checkboxes.get(category)
+            if checkbox is None:
+                checkbox = QCheckBox(category)
+                checkbox.setChecked(result["count"] > 0)
+                self.result_checkboxes[category] = checkbox
+            checkbox.setEnabled(result["count"] > 0)
+            if result["count"] == 0:
+                checkbox.setChecked(False)
+
+            category_layout.addWidget(checkbox)
+            category_layout.addStretch()
+            self.results_table.setCellWidget(i, 0, category_widget)
+            self.results_table.setItem(i, 1, QTableWidgetItem(str(result["count"])))
+            self.results_table.setItem(i, 2, QTableWidgetItem(f"{result['size_mb']:.1f} MB"))
+
+            action_widget = QWidget()
+            action_layout = QHBoxLayout(action_widget)
+            action_layout.setContentsMargins(5, 5, 5, 5)
+
+            view_btn = QPushButton("查看文件")
+            view_btn.setEnabled(result["count"] > 0)
+            view_btn.clicked.connect(lambda checked, cat=category: self.view_files(cat))
+            action_layout.addWidget(view_btn)
+
+            self.results_table.setCellWidget(i, 3, action_widget)
+
+        self.clean_btn.setEnabled(total_files > 0)
+
+    def open_selected_file_location(self, filepath: str):
+        """打开所选文件位置。"""
+        if not filepath:
+            QMessageBox.information(self, "提示", "请先选择一个文件")
+            return
+        if not os.path.exists(filepath):
+            QMessageBox.warning(self, "提示", "文件已不存在")
+            return
+
+        try:
+            subprocess.run(["explorer", "/select,", filepath], check=False)
+        except Exception as e:
+            self.log(f"打开文件位置失败: {e}")
+
+    def exclude_selected_files(self, category, file_list, dialog):
+        """从本次清理结果中排除所选文件。"""
+        selected_items = file_list.selectedItems()
+        if not selected_items:
+            QMessageBox.information(dialog, "提示", "请先选择要排除的文件")
+            return
+
+        excluded_files = {item.text() for item in selected_items}
+        current_files = self.scan_results.get(category, {}).get("files", [])
+        remaining_files = [file_path for file_path in current_files if file_path not in excluded_files]
+        removed_count = len(current_files) - len(remaining_files)
+        if removed_count <= 0:
+            return
+
+        remaining_size_mb = round(
+            sum(os.path.getsize(file_path) for file_path in remaining_files if os.path.isfile(file_path)) / (1024 ** 2),
+            1,
+        )
+        self.scan_results[category]["files"] = remaining_files
+        self.scan_results[category]["count"] = len(remaining_files)
+        self.scan_results[category]["size_mb"] = remaining_size_mb
+
+        self.refresh_results_table()
+        self.log(f"已从 {category} 排除 {removed_count} 个文件")
+        dialog.accept()
         
     def log(self, message: str):
         """添加日志"""
         from datetime import datetime
         timestamp = datetime.now().strftime("%H:%M:%S")
         self.log_text.append(f"[{timestamp}] {message}")
+        engine.log("INFO", f"[垃圾清理] {message}")
         
         # 滚动到底部
         cursor = self.log_text.textCursor()

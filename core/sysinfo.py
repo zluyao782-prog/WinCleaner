@@ -5,8 +5,11 @@
 """
 
 import platform
+import logging
 import psutil
-from typing import Dict, Optional
+from typing import Dict
+
+logger = logging.getLogger(__name__)
 
 try:
     import winreg
@@ -59,10 +62,10 @@ def get_system_info() -> Dict[str, str]:
                 info["cpu"] = cpu_info.Name.strip()
                 
             except Exception as e:
-                print(f"WMI查询失败: {e}")
+                logger.warning("WMI查询失败: %s", e)
                 
     except Exception as e:
-        print(f"获取系统信息失败: {e}")
+        logger.warning("获取系统信息失败: %s", e)
         
     return info
 
@@ -83,18 +86,26 @@ def get_update_status() -> str:
     except FileNotFoundError:
         return "已启用"
     except Exception as e:
-        print(f"查询更新状态失败: {e}")
+        logger.warning("查询更新状态失败: %s", e)
         return "未知"
 
 
 def get_last_update_time() -> str:
     """获取最后更新时间"""
     try:
-        # 这里可以通过WMI或注册表查询最后更新时间
-        # 简化实现，返回占位符
-        return "2026-03-30"
-    except Exception:
+        if WMI_AVAILABLE:
+            patches = wmi.WMI().Win32_QuickFixEngineering()
+            installed_dates = []
+            for patch in patches:
+                installed_on = getattr(patch, "InstalledOn", "") or ""
+                if installed_on:
+                    installed_dates.append(installed_on)
+            if installed_dates:
+                return max(installed_dates)
+    except Exception as e:
+        logger.warning("获取最后更新时间失败: %s", e)
         return "未知"
+    return "未知"
 
 
 def get_system_uptime() -> str:
@@ -122,7 +133,7 @@ def get_system_uptime() -> str:
 def get_cpu_usage() -> float:
     """获取CPU使用率"""
     try:
-        return psutil.cpu_percent(interval=1)
+        return psutil.cpu_percent(interval=None)
     except Exception:
         return 0.0
 

@@ -15,6 +15,7 @@ from core.sysinfo import (
     get_system_info, get_update_status, get_system_uptime,
     get_cpu_usage, get_memory_usage
 )
+from core.engine import engine
 
 
 class InfoCard(QFrame):
@@ -161,6 +162,7 @@ class SystemInfoPage(QWidget):
     def refresh(self):
         """刷新系统信息"""
         try:
+            engine.log("INFO", "[系统信息] 刷新系统信息")
             # 获取系统信息
             sys_info = get_system_info()
             
@@ -182,7 +184,9 @@ class SystemInfoPage(QWidget):
             self.update_performance()
             
         except Exception as e:
-            print(f"刷新系统信息失败: {e}")
+            from logging import getLogger
+            getLogger(__name__).warning("刷新系统信息失败: %s", e)
+            engine.log("ERROR", f"[系统信息] 刷新失败: {e}")
             
     def update_performance(self):
         """更新性能监控"""
@@ -199,4 +203,5 @@ class SystemInfoPage(QWidget):
             self.mem_label.setText(f"{mem_percent:.1f}% ({mem_info.get('used', 0):.1f}GB / {mem_info.get('total', 0):.1f}GB)")
             
         except Exception as e:
-            print(f"更新性能监控失败: {e}")
+            from logging import getLogger
+            getLogger(__name__).warning("更新性能监控失败: %s", e)

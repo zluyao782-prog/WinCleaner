@@ -8,6 +8,7 @@ WinCleaner - Windows 系统清理工具
 import sys
 import ctypes
 import os
+import subprocess
 from PyQt6.QtWidgets import QApplication, QMessageBox
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QIcon
@@ -23,13 +24,15 @@ def require_admin():
         is_admin = False
     
     if not is_admin:
-        # 弹出UAC提权对话框
         try:
-            ctypes.windll.shell32.ShellExecuteW(
-                None, "runas", sys.executable, " ".join(sys.argv), None, 1
+            params = subprocess.list2cmdline(sys.argv[1:])
+            result = ctypes.windll.shell32.ShellExecuteW(
+                None, "runas", sys.executable, params, None, 1
             )
-        except:
-            pass
+            if result <= 32:
+                raise OSError(f"ShellExecuteW failed: {result}")
+        except Exception:
+            QMessageBox.critical(None, "权限错误", "无法获取管理员权限，程序将退出。")
         sys.exit()
 
 

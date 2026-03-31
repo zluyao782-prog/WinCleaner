@@ -4,17 +4,37 @@
 进程管理模块：实时列出所有后台进程，标记高负荷程序，支持一键终止
 """
 
-import psutil
+import json
+import logging
 import time
-from typing import List, Dict, Tuple
+from pathlib import Path
+from typing import Dict, List
+
+import psutil
+
+logger = logging.getLogger(__name__)
+CONFIG_PATH = Path(__file__).resolve().parent.parent / "config" / "protected_procs.json"
 
 
-# 系统保护进程名单（小写）
-PROTECTED_PROCESSES = {
+DEFAULT_PROTECTED_PROCESSES = {
     "system", "smss.exe", "csrss.exe", "wininit.exe",
     "winlogon.exe", "lsass.exe", "services.exe",
     "dwm.exe", "explorer.exe", "svchost.exe"
 }
+
+
+def load_protected_processes() -> set[str]:
+    try:
+        with CONFIG_PATH.open("r", encoding="utf-8") as f:
+            raw = json.load(f)
+        processes = raw.get("protected_processes", [])
+        return {str(name).lower() for name in processes}
+    except Exception as e:
+        logger.warning("加载受保护进程配置失败，使用默认配置: %s", e)
+        return DEFAULT_PROTECTED_PROCESSES.copy()
+
+
+PROTECTED_PROCESSES = load_protected_processes()
 
 
 def get_processes(sort_by: str = "cpu") -> List[Dict]:
@@ -42,7 +62,7 @@ def get_processes(sort_by: str = "cpu") -> List[Dict]:
                 memory_mb = 0.0
             
             # 获取CPU使用率
-            cpu_percent = round(info['cpu_percent'] or 0.0, 1)
+            cpu_percent = round(proc.cpu_percent(interval=None), 1)
             
             # 判断负荷级别
             level = get_load_level(cpu_percent, memory_mb)
@@ -106,9 +126,9 @@ def get_load_level(cpu_percent: float, memory_mb: float) -> str:
     Returns:
         str: "normal", "warning", "high"
     """
-    if cpu_percent > 50 or memory_mb > 500:
+    if cpu_percent > 80 or memory_mb > 1024:
         return "high"
-    elif cpu_percent > 20 or memory_mb > 200:
+    elif cpu_percent > 50 or memory_mb > 512:
         return "warning"
     else:
         return "normal"
@@ -170,7 +190,7 @@ def kill_process(pid: int, force: bool = False) -> bool:
     except (psutil.NoSuchProcess, psutil.AccessDenied):
         return False
     except Exception as e:
-        print(f"终止进程 {pid} 失败: {e}")
+        logger.warning("终止进程失败: pid=%s error=%s", pid, e)
         return False
 
 
@@ -186,6 +206,12 @@ def kill_high_load_processes() -> Dict[str, int]:
     
     for proc in high_load_procs:
         if not proc['is_protected']:
+            proc_name = (proc.get("name") or "").lower()
+            username = (proc.get("username") or "").upper()
+            if proc_name in {"code.exe", "pycharm64.exe", "idea64.exe"}:
+                continue
+            if username.startswith("NT AUTHORITY\\") or username == "SYSTEM":
+                continue
             if kill_process(proc['pid']):
                 success_count += 1
             else:
@@ -202,7 +228,7 @@ def get_system_performance() -> Dict[str, float]:
     """
     try:
         # CPU使用率
-        cpu_percent = psutil.cpu_percent(interval=1)
+        cpu_percent = psutil.cpu_percent(interval=None)
         
         # 内存使用情况
         memory = psutil.virtual_memory()
@@ -219,7 +245,7 @@ def get_system_performance() -> Dict[str, float]:
         }
         
     except Exception as e:
-        print(f"获取系统性能失败: {e}")
+        logger.warning("获取系统性能失败: %s", e)
         return {
             "cpu_percent": 0.0,
             "memory_percent": 0.0,

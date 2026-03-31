@@ -14,9 +14,9 @@ from PyQt6.QtCore import Qt, QTimer, pyqtSignal
 from PyQt6.QtGui import QFont, QColor
 
 from core.process_mgr import (
-    get_processes, get_high_load_processes, kill_process,
-    kill_high_load_processes, get_system_performance, search_processes
+    get_processes, kill_process, get_system_performance, search_processes
 )
+from core.engine import engine
 
 
 class ProcessPage(QWidget):
@@ -137,7 +137,7 @@ class ProcessPage(QWidget):
         self.refresh_btn.clicked.connect(self.refresh)
         row2_layout.addWidget(self.refresh_btn)
         
-        self.kill_high_btn = QPushButton("关闭高负荷进程")
+        self.kill_high_btn = QPushButton("关闭所选高负荷进程")
         self.kill_high_btn.clicked.connect(self.kill_high_load)
         self.kill_high_btn.setStyleSheet("QPushButton { background-color: #C05000; color: white; }")
         row2_layout.addWidget(self.kill_high_btn)
@@ -165,6 +165,7 @@ class ProcessPage(QWidget):
         
         # 设置表格属性
         self.process_table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
+        self.process_table.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)
         self.process_table.setAlternatingRowColors(True)
         
         # 设置列宽
@@ -240,7 +241,8 @@ class ProcessPage(QWidget):
             self.process_card.value_label.setText(str(proc_count))
             
         except Exception as e:
-            print(f"更新性能概览失败: {e}")
+            from logging import getLogger
+            getLogger(__name__).warning("更新性能概览失败: %s", e)
             
     def update_process_table(self):
         """更新进程表格"""
@@ -331,22 +333,31 @@ class ProcessPage(QWidget):
                 self.log(f"❌ 终止进程异常: {name} (PID: {pid}) - {e}")
                 
     def kill_high_load(self):
-        """终止高负荷进程"""
-        high_load_procs = get_high_load_processes()
-        unprotected_procs = [p for p in high_load_procs if not p["is_protected"]]
+        """终止所选高负荷进程"""
+        selected_rows = sorted({index.row() for index in self.process_table.selectionModel().selectedRows()})
+        selected_procs = []
+        for row in selected_rows:
+            if row >= len(self.current_processes):
+                continue
+            proc = self.current_processes[row]
+            if proc["is_protected"]:
+                continue
+            if proc["level"] not in {"warning", "high"}:
+                continue
+            selected_procs.append(proc)
         
-        if not unprotected_procs:
-            QMessageBox.information(self, "提示", "没有找到可终止的高负荷进程")
+        if not selected_procs:
+            QMessageBox.information(self, "提示", "请先在表格中选择要终止的高负荷进程")
             return
             
         proc_names = [f"{p['name']} (CPU: {p['cpu_percent']}%, 内存: {p['memory_mb']}MB)" 
-                     for p in unprotected_procs[:5]]  # 最多显示5个
+                     for p in selected_procs[:5]]  # 最多显示5个
         
         reply = QMessageBox.question(
             self, "确认批量终止",
-            f"发现 {len(unprotected_procs)} 个高负荷进程：\n\n" + 
+            f"将终止 {len(selected_procs)} 个已选高负荷进程：\n\n" +
             "\n".join(proc_names) +
-            (f"\n... 还有 {len(unprotected_procs) - 5} 个" if len(unprotected_procs) > 5 else "") +
+            (f"\n... 还有 {len(selected_procs) - 5} 个" if len(selected_procs) > 5 else "") +
             "\n\n确定要全部终止吗？",
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
             QMessageBox.StandardButton.No
@@ -354,9 +365,13 @@ class ProcessPage(QWidget):
         
         if reply == QMessageBox.StandardButton.Yes:
             try:
-                result = kill_high_load_processes()
-                success = result.get("success", 0)
-                failed = result.get("failed", 0)
+                success = 0
+                failed = 0
+                for proc in selected_procs:
+                    if kill_process(proc["pid"]):
+                        success += 1
+                    else:
+                        failed += 1
                 
                 self.log(f"批量终止完成: 成功 {success} 个，失败 {failed} 个")
                 
@@ -408,6 +423,7 @@ class ProcessPage(QWidget):
         from datetime import datetime
         timestamp = datetime.now().strftime("%H:%M:%S")
         self.log_text.append(f"[{timestamp}] {message}")
+        engine.log("INFO", f"[进程管理] {message}")
         
         # 滚动到底部
         cursor = self.log_text.textCursor()

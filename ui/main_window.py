@@ -5,12 +5,13 @@
 """
 
 from PyQt6.QtWidgets import (
-    QMainWindow, QWidget, QHBoxLayout, QVBoxLayout, 
+    QMainWindow, QWidget, QHBoxLayout, QVBoxLayout,
     QStackedWidget, QListWidget, QListWidgetItem,
-    QLabel, QFrame, QStatusBar
+    QLabel, QFrame, QStatusBar, QPlainTextEdit,
+    QPushButton, QSplitter, QComboBox, QFileDialog
 )
 from PyQt6.QtCore import Qt, QTimer
-from PyQt6.QtGui import QFont, QIcon
+from PyQt6.QtGui import QFont
 
 from ui.pages.sysinfo_page import SystemInfoPage
 from ui.pages.update_page import UpdatePage
@@ -25,6 +26,7 @@ class MainWindow(QMainWindow):
     
     def __init__(self):
         super().__init__()
+        self.log_records = []
         self.init_ui()
         self.setup_connections()
         
@@ -49,7 +51,7 @@ class MainWindow(QMainWindow):
         
         # 创建内容区域
         self.create_content_area()
-        main_layout.addWidget(self.content_widget, 1)
+        main_layout.addWidget(self.content_container, 1)
         
         # 创建状态栏
         self.create_status_bar()
@@ -100,6 +102,14 @@ class MainWindow(QMainWindow):
         
     def create_content_area(self):
         """创建内容区域"""
+        self.content_container = QWidget()
+        content_layout = QVBoxLayout(self.content_container)
+        content_layout.setContentsMargins(0, 0, 0, 0)
+        content_layout.setSpacing(0)
+
+        self.content_splitter = QSplitter(Qt.Orientation.Vertical)
+        content_layout.addWidget(self.content_splitter)
+
         self.content_widget = QStackedWidget()
         
         # 创建各个页面
@@ -114,10 +124,51 @@ class MainWindow(QMainWindow):
         # 添加页面到堆栈
         for page in self.pages.values():
             self.content_widget.addWidget(page)
+
+        self.content_splitter.addWidget(self.content_widget)
+        self.create_log_panel()
+        self.content_splitter.setSizes([560, 180])
             
         # 默认显示第一页
         self.content_widget.setCurrentIndex(0)
         self.nav_list.setCurrentRow(0)
+
+    def create_log_panel(self):
+        """创建全局日志面板"""
+        log_panel = QFrame()
+        log_layout = QVBoxLayout(log_panel)
+        log_layout.setContentsMargins(12, 12, 12, 12)
+        log_layout.setSpacing(8)
+
+        header_layout = QHBoxLayout()
+        header_label = QLabel("运行日志")
+        header_font = QFont()
+        header_font.setPointSize(13)
+        header_font.setBold(True)
+        header_label.setFont(header_font)
+        header_layout.addWidget(header_label)
+        header_layout.addStretch()
+
+        self.log_level_filter = QComboBox()
+        self.log_level_filter.addItems(["全部", "INFO", "WARNING", "ERROR"])
+        self.log_level_filter.currentTextChanged.connect(self.refresh_global_log_view)
+        header_layout.addWidget(self.log_level_filter)
+
+        export_btn = QPushButton("导出")
+        export_btn.clicked.connect(self.export_global_logs)
+        header_layout.addWidget(export_btn)
+
+        clear_btn = QPushButton("清空")
+        clear_btn.clicked.connect(self.clear_global_logs)
+        header_layout.addWidget(clear_btn)
+        log_layout.addLayout(header_layout)
+
+        self.global_log_text = QPlainTextEdit()
+        self.global_log_text.setReadOnly(True)
+        self.global_log_text.setMaximumBlockCount(500)
+        log_layout.addWidget(self.global_log_text)
+
+        self.content_splitter.addWidget(log_panel)
         
     def create_status_bar(self):
         """创建状态栏"""
@@ -127,6 +178,10 @@ class MainWindow(QMainWindow):
         # 权限状态
         admin_status = "管理员权限" if engine.is_admin() else "普通用户"
         self.status_bar.addPermanentWidget(QLabel(f"权限: {admin_status}"))
+
+        self.status_log_label = QLabel("就绪")
+        self.status_log_label.setMinimumWidth(420)
+        self.status_bar.addWidget(self.status_log_label, 1)
         
         # 时间显示
         self.time_label = QLabel()
@@ -147,6 +202,7 @@ class MainWindow(QMainWindow):
     def setup_connections(self):
         """设置信号连接"""
         self.nav_list.currentRowChanged.connect(self.on_nav_changed)
+        engine.log_message.connect(self.append_global_log)
         
     def on_nav_changed(self, index):
         """导航切换事件"""
@@ -156,6 +212,46 @@ class MainWindow(QMainWindow):
         current_page = list(self.pages.values())[index]
         if hasattr(current_page, 'refresh'):
             current_page.refresh()
+
+    def append_global_log(self, level: str, message: str):
+        """追加全局日志。"""
+        line = f"[{level}] {message}"
+        self.log_records.append((level, message, line))
+        self.refresh_global_log_view()
+        compact = line.replace("\n", " ")
+        self.status_log_label.setText(compact[:120])
+
+    def clear_global_logs(self):
+        """清空全局日志面板。"""
+        self.log_records.clear()
+        self.global_log_text.clear()
+        self.status_log_label.setText("日志已清空")
+
+    def refresh_global_log_view(self):
+        """按当前过滤条件刷新日志面板。"""
+        current_filter = self.log_level_filter.currentText()
+        self.global_log_text.clear()
+        for level, _, line in self.log_records:
+            if current_filter != "全部" and level != current_filter:
+                continue
+            self.global_log_text.appendPlainText(line)
+
+    def export_global_logs(self):
+        """导出当前日志面板内容。"""
+        path, _ = QFileDialog.getSaveFileName(
+            self,
+            "导出运行日志",
+            "wincleaner-log.txt",
+            "Text Files (*.txt);;All Files (*)",
+        )
+        if not path:
+            return
+        try:
+            with open(path, "w", encoding="utf-8") as f:
+                f.write(self.global_log_text.toPlainText())
+            self.status_log_label.setText(f"日志已导出: {path}")
+        except Exception as e:
+            self.status_log_label.setText(f"日志导出失败: {e}")
             
     def set_styles(self):
         """设置样式"""
@@ -193,6 +289,13 @@ class MainWindow(QMainWindow):
             
             QLabel {
                 color: #333;
+            }
+
+            QPlainTextEdit {
+                background-color: #FAFBFD;
+                border: 1px solid #D8E0EA;
+                font-family: Consolas, 'Courier New', monospace;
+                font-size: 12px;
             }
             
             QStatusBar {

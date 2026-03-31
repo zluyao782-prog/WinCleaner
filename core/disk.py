@@ -5,9 +5,11 @@
 """
 
 import os
+import logging
 import psutil
 from typing import List, Dict, Tuple
-from pathlib import Path
+
+logger = logging.getLogger(__name__)
 
 
 def get_disk_usage() -> List[Dict]:
@@ -35,10 +37,9 @@ def get_disk_usage() -> List[Dict]:
             result.append(partition_info)
             
         except PermissionError:
-            # 跳过无法访问的分区（如光驱等）
             continue
         except Exception as e:
-            print(f"获取分区 {partition.device} 信息失败: {e}")
+            logger.warning("获取分区信息失败: device=%s error=%s", partition.device, e)
             continue
             
     return result
@@ -73,7 +74,7 @@ def scan_large_files(path: str, top_n: int = 20) -> List[Tuple[int, str]]:
                     continue
                     
     except Exception as e:
-        print(f"扫描路径 {path} 失败: {e}")
+        logger.warning("扫描大文件失败: path=%s error=%s", path, e)
         
     # 按大小降序排序，返回前N个
     return sorted(files, reverse=True)[:top_n]
@@ -109,7 +110,7 @@ def get_disk_io_speed() -> Dict[str, float]:
         }
         
     except Exception as e:
-        print(f"获取磁盘IO速度失败: {e}")
+        logger.warning("获取磁盘IO速度失败: %s", e)
         return {"read_speed": 0.0, "write_speed": 0.0}
 
 
@@ -133,7 +134,7 @@ def get_directory_size(path: str) -> int:
                 except (OSError, PermissionError):
                     continue
     except Exception as e:
-        print(f"计算目录 {path} 大小失败: {e}")
+        logger.warning("计算目录大小失败: path=%s error=%s", path, e)
         
     return total_size
 
@@ -170,7 +171,7 @@ def analyze_disk_space(drive: str) -> Dict[str, any]:
                 result["categories"][dir_name] = size
                 
     except Exception as e:
-        print(f"分析磁盘 {drive} 失败: {e}")
+        logger.warning("分析磁盘失败: drive=%s error=%s", drive, e)
         
     return result
 
